@@ -10,7 +10,14 @@ import {
     getSnapshot,
     unprotect,
     types,
-    setLivelynessChecking
+    setLivelinessChecking,
+    getParent,
+    SnapshotOut,
+    IJsonPatch,
+    ISerializedActionCall,
+    isAlive,
+    cast,
+    resolveIdentifier
 } from "../../src"
 
 import { autorun, reaction, observable } from "mobx"
@@ -98,7 +105,7 @@ test("it should create a factory", () => {
     const instance = Factory.create()
     const snapshot = getSnapshot(instance)
     expect(snapshot).toEqual({ to: "world" })
-    expect(Factory.create().toJSON!()).toEqual({ to: "world" }) // toJSON is there as shortcut for getSnapshot(), primarily for debugging convenience
+    expect(getSnapshot(Factory.create())).toEqual({ to: "world" }) // toJSON is there as shortcut for getSnapshot(), primarily for debugging convenience
     expect(Factory.create().toString()).toEqual("AnonymousModel@<root>")
 })
 test("it should restore the state from the snapshot", () => {
@@ -110,7 +117,7 @@ test("it should emit snapshots", () => {
     const { Factory } = createTestFactories()
     const doc = Factory.create()
     unprotect(doc)
-    let snapshots: any[] = []
+    let snapshots: SnapshotOut<typeof doc>[] = []
     onSnapshot(doc, snapshot => snapshots.push(snapshot))
     doc.to = "universe"
     expect(snapshots).toEqual([{ to: "universe" }])
@@ -129,8 +136,8 @@ test("it should emit snapshots for children", () => {
             }
         ]
     })
-    let snapshotsP: any[] = []
-    let snapshotsC: any[] = []
+    let snapshotsP: SnapshotOut<typeof folder>[] = []
+    let snapshotsC: SnapshotOut<typeof folder.files[0]>[] = []
     onSnapshot(folder, snapshot => snapshotsP.push(snapshot))
     folder.rename("Vacation photos")
     expect(snapshotsP[0]).toEqual({
@@ -195,7 +202,7 @@ test("it should emit patches", () => {
     const { Factory } = createTestFactories()
     const doc = Factory.create()
     unprotect(doc)
-    let patches: any[] = []
+    let patches: IJsonPatch[] = []
     onPatch(doc, patch => patches.push(patch))
     doc.to = "universe"
     expect(patches).toEqual([{ op: "replace", path: "/to", value: "universe" }])
@@ -219,7 +226,7 @@ test("it should stop listening to patches patches", () => {
     const { Factory } = createTestFactories()
     const doc = Factory.create()
     unprotect(doc)
-    let patches: any[] = []
+    let patches: IJsonPatch[] = []
     let disposer = onPatch(doc, patch => patches.push(patch))
     doc.to = "universe"
     disposer()
@@ -236,7 +243,7 @@ test("it should call actions correctly", () => {
 test("it should emit action calls", () => {
     const { Factory } = createTestFactories()
     const doc = Factory.create()
-    let actions: any[] = []
+    let actions: ISerializedActionCall[] = []
     onAction(doc, action => actions.push(action))
     doc.setTo("universe")
     expect(actions).toEqual([{ name: "setTo", path: "", args: ["universe"] }])
@@ -269,39 +276,126 @@ test("it should have computed properties", () => {
 test("it should throw if a replaced object is read or written to", () => {
     const Todo = types
         .model("Todo", {
-            title: "test"
+            title: "test",
+            arr: types.array(types.string),
+            map: types.map(types.string),
+            sub: types.optional(
+                types
+                    .model("Sub", {
+                        title: "test2"
+                    })
+                    .actions(self => ({
+                        fn2() {}
+                    })),
+                {}
+            )
         })
-        .actions(self => {
-            function fn() {}
-            return {
-                fn
+        .actions(self => ({
+            fn() {
+                self.sub.fn2()
             }
-        })
+        }))
     const Store = types.model("Store", {
         todo: Todo
     })
-    const s = Store.create({
-        todo: { title: "3" }
-    })
+    const data = {
+        title: "alive",
+        arr: ["arr0"],
+        map: { mapkey0: "mapval0" },
+        sub: { title: "title" }
+    }
+    const s = Store.create({ todo: { ...data, title: "dead" } })
     unprotect(s)
-    const todo = s.todo
-    s.todo = Todo.create({ title: "4" })
-    expect(s.todo.title).toBe("4")
 
-    setLivelynessChecking("error")
-    // try reading old todo
-    const err =
-        "You are trying to read or write to an object that is no longer part of a state tree. (Object type was 'Todo'). Either detach nodes first, or don't use objects after removing / replacing them in the tree"
+    const deadArr = s.todo.arr
+    s.todo.arr = cast(data.arr)
+
+    const deadMap = s.todo.map
+    s.todo.map = cast(data.map)
+
+    const deadSub = s.todo.sub
+    s.todo.sub = cast(data.sub)
+
+    const deadTodo = s.todo
+    s.todo = Todo.create(data)
+
+    expect(s.todo.title).toBe("alive")
+
+    setLivelinessChecking("error")
+
+    function getError(objType: string, path: string, subpath: string, action: string) {
+        return `You are trying to read or write to an object that is no longer part of a state tree. (Object type: '${objType}', Path upon death: '${path}', Subpath: '${subpath}', Action: '${action}'). Either detach nodes first, or don't use objects after removing / replacing them in the tree.`
+    }
+
+    // dead todo
     expect(() => {
-        todo.fn()
-    }).toThrow(err)
+        deadTodo.fn()
+    }).toThrow(getError("Todo", "/todo", "", "/todo.fn()"))
     expect(() => {
         // tslint:disable-next-line:no-unused-expression
-        todo.title
-    }).toThrow(err)
+        deadTodo.title
+    }).toThrow(getError("Todo", "/todo", "title", ""))
     expect(() => {
-        todo.title = "5"
-    }).toThrow(err)
+        deadTodo.title = "5"
+    }).toThrow(getError("Todo", "/todo", "title", ""))
+
+    expect(() => {
+        // tslint:disable-next-line:no-unused-expression
+        deadTodo.arr[0]
+    }).toThrow(getError("Todo", "/todo", "arr", ""))
+    expect(() => {
+        deadTodo.arr.push("arr1")
+    }).toThrow(getError("Todo", "/todo", "arr", ""))
+
+    expect(() => {
+        deadTodo.map.get("mapkey0")
+    }).toThrow(getError("Todo", "/todo", "map", ""))
+    expect(() => {
+        deadTodo.map.set("mapkey1", "val")
+    }).toThrow(getError("Todo", "/todo", "map", ""))
+
+    expect(() => {
+        deadTodo.sub.fn2()
+    }).toThrow(getError("Todo", "/todo", "sub", ""))
+    expect(() => {
+        // tslint:disable-next-line:no-unused-expression
+        deadTodo.sub.title
+    }).toThrow(getError("Todo", "/todo", "sub", ""))
+    expect(() => {
+        deadTodo.sub.title = "hi"
+    }).toThrow(getError("Todo", "/todo", "sub", ""))
+
+    // dead array
+    expect(() => {
+        // tslint:disable-next-line:no-unused-expression
+        deadArr[0]
+    }).toThrow(getError("string[]", "/todo/arr", "0", ""))
+    expect(() => {
+        deadArr[0] = "hi"
+    }).toThrow(getError("string[]", "/todo/arr", "0", ""))
+    expect(() => {
+        deadArr.push("hi")
+    }).toThrow(getError("string[]", "/todo/arr", "1", ""))
+
+    // dead map
+    expect(() => {
+        deadMap.get("mapkey0")
+    }).toThrow(getError("map<string, string>", "/todo/map", "mapkey0", ""))
+    expect(() => {
+        deadMap.set("mapkey0", "val")
+    }).toThrow(getError("map<string, string>", "/todo/map", "mapkey0", ""))
+
+    // dead subobj
+    expect(() => {
+        deadSub.fn2()
+    }).toThrow(getError("Sub", "/todo/sub", "", "/todo/sub.fn2()"))
+    expect(() => {
+        // tslint:disable-next-line:no-unused-expression
+        deadSub.title
+    }).toThrow(getError("Sub", "/todo/sub", "title", ""))
+    expect(() => {
+        deadSub.title = "ho"
+    }).toThrow(getError("Sub", "/todo/sub", "title", ""))
 })
 
 test("it should warn if a replaced object is read or written to", () => {
@@ -327,19 +421,15 @@ test("it should warn if a replaced object is read or written to", () => {
     expect(s.todo.title).toBe("4")
 
     // try reading old todo
-    setLivelynessChecking("warn")
-    const bwarn = console.warn
-    try {
-        const mock = (console.warn = jest.fn())
-        todo.fn()
-        // tslint:disable-next-line:no-unused-expression
-        todo.title
-        unprotect(todo)
+    setLivelinessChecking("error")
+    const error =
+        "You are trying to read or write to an object that is no longer part of a state tree"
+    expect(() => todo.fn()).toThrow(error)
+    expect(() => todo.title).toThrow(error)
+    unprotect(todo)
+    expect(() => {
         todo.title = "5"
-        expect(mock.mock.calls).toMatchSnapshot()
-    } finally {
-        console.warn = bwarn
-    }
+    }).toThrow(error)
 })
 
 // === COMPOSE FACTORY ===
@@ -541,7 +631,7 @@ test("view functions should be tracked", () => {
         }))
         .create()
     unprotect(model)
-    const values: any[] = []
+    const values: number[] = []
     const d = autorun(() => {
         values.push(model.doubler())
     })
@@ -667,7 +757,7 @@ test("it should be possible to share states between views and actions using enha
     d()
 })
 test("It should throw if any other key is returned from extend", () => {
-    const A = types.model({}).extend(() => ({ stuff() {} } as any)) // TODO: fix typing
+    const A = types.model({}).extend(() => ({ stuff() {} } as any))
     expect(() => A.create()).toThrowError(/stuff/)
 })
 
@@ -706,3 +796,353 @@ if (process.env.NODE_ENV === "development")
             "Invalid type definition for property 'x', it looks like you passed a function. Did you forget to invoke it, or did you intend to declare a view / action?"
         )
     })
+
+test("#967 - changing values in afterCreate/afterAttach when node is instantiated from view", () => {
+    const Answer = types
+        .model("Answer", {
+            title: types.string,
+            selected: false
+        })
+        .actions(self => ({
+            toggle() {
+                self.selected = !self.selected
+            }
+        }))
+    const Question = types
+        .model("Question", { title: types.string, answers: types.array(Answer) })
+        .views(self => ({
+            get brokenView() {
+                // this should not be allowed
+                expect(() => {
+                    self.answers[0].toggle()
+                }).toThrow()
+                return 0
+            }
+        }))
+        .actions(self => ({
+            afterCreate() {
+                // we should allow changes even when inside a computed property when done inside afterCreate/afterAttach
+                self.answers[0].toggle()
+                // but not further computed changes
+                expect(self.brokenView).toBe(0)
+            },
+            afterAttach() {
+                // we should allow changes even when inside a computed property when done inside afterCreate/afterAttach
+                self.answers[0].toggle()
+                expect(self.brokenView).toBe(0)
+            }
+        }))
+
+    const Product = types
+        .model("Product", {
+            questions: types.array(Question)
+        })
+        .views(self => ({
+            get selectedAnswers() {
+                const result = []
+                for (const question of self.questions) {
+                    result.push(question.answers.find(a => a.selected))
+                }
+                return result
+            }
+        }))
+
+    const product = Product.create({
+        questions: [
+            { title: "Q 0", answers: [{ title: "A 0.0" }, { title: "A 0.1" }] },
+            { title: "Q 1", answers: [{ title: "A 1.0" }, { title: "A 1.1" }] }
+        ]
+    })
+
+    // tslint:disable-next-line:no-unused-expression
+    product.selectedAnswers
+})
+
+test("#993-1 - after attach should have a parent when accesing a reference directly", () => {
+    const L4 = types
+        .model("Todo", {
+            id: types.identifier,
+            finished: false
+        })
+        .actions(self => ({
+            afterAttach() {
+                expect(getParent(self)).toBeTruthy()
+            }
+        }))
+
+    const L3 = types.model({ l4: L4 }).actions(self => ({
+        afterAttach() {
+            expect(getParent(self)).toBeTruthy()
+        }
+    }))
+
+    const L2 = types
+        .model({
+            l3: L3
+        })
+        .actions(self => ({
+            afterAttach() {
+                expect(getParent(self)).toBeTruthy()
+            }
+        }))
+
+    const L1 = types
+        .model({
+            l2: L2,
+            selected: types.reference(L4)
+        })
+        .actions(self => ({
+            afterAttach() {
+                throw fail("should never be called")
+            }
+        }))
+
+    const createL1 = () =>
+        L1.create({
+            l2: {
+                l3: {
+                    l4: {
+                        id: "11124091-11c1-4dda-b2ed-7dd6323491a5"
+                    }
+                }
+            },
+            selected: "11124091-11c1-4dda-b2ed-7dd6323491a5"
+        })
+
+    // test 1, real child first
+    {
+        const l1 = createL1()
+
+        const a = l1.l2.l3.l4
+        const b = l1.selected
+    }
+
+    // test 2, reference first
+    {
+        const l1 = createL1()
+
+        const a = l1.selected
+        const b = l1.l2.l3.l4
+    }
+})
+
+test("#993-2 - references should have a parent event when the parent has not been accesed before", () => {
+    const events: string[] = []
+
+    const L4 = types
+        .model("Todo", {
+            id: types.identifier,
+            finished: false
+        })
+        .actions(self => ({
+            toggle() {
+                self.finished = !self.finished
+            },
+            afterCreate() {
+                events.push("l4-ac")
+            },
+            afterAttach() {
+                events.push("l4-at")
+            }
+        }))
+
+    const L3 = types.model({ l4: L4 }).actions(self => ({
+        afterCreate() {
+            events.push("l3-ac")
+        },
+        afterAttach() {
+            events.push("l3-at")
+        }
+    }))
+
+    const L2 = types
+        .model({
+            l3: L3
+        })
+        .actions(self => ({
+            afterCreate() {
+                events.push("l2-ac")
+            },
+            afterAttach() {
+                events.push("l2-at")
+            }
+        }))
+
+    const L1 = types
+        .model({
+            l2: L2,
+            selected: types.reference(L4)
+        })
+        .actions(self => ({
+            afterCreate() {
+                events.push("l1-ac")
+            },
+            afterAttach() {
+                events.push("l1-at")
+            }
+        }))
+
+    const createL1 = () =>
+        L1.create({
+            l2: {
+                l3: {
+                    l4: {
+                        id: "11124091-11c1-4dda-b2ed-7dd6323491a5"
+                    }
+                }
+            },
+            selected: "11124091-11c1-4dda-b2ed-7dd6323491a5"
+        })
+
+    const expectedEvents = [
+        "l1-ac",
+        "l2-ac",
+        "l2-at",
+        "l3-ac",
+        "l3-at",
+        "l4-ac",
+        "l4-at",
+        "onSnapshot",
+        "onSnapshot"
+    ]
+
+    // test 1, real child first
+    {
+        const l1 = createL1()
+        onSnapshot(l1, () => {
+            events.push("onSnapshot")
+        })
+
+        l1.l2.l3.l4.toggle()
+        l1.selected.toggle()
+        expect(events).toEqual(expectedEvents)
+    }
+
+    // test 2, reference first
+    events.length = 0
+    {
+        const l1 = createL1()
+        onSnapshot(l1, () => {
+            events.push("onSnapshot")
+        })
+
+        l1.selected.toggle()
+        l1.l2.l3.l4.toggle()
+        expect(events).toEqual(expectedEvents)
+    }
+
+    // test 3, reference get parent should be available from the beginning and all the way to the root
+    {
+        const rootL1 = createL1()
+        const l4 = rootL1.selected
+        const l3 = getParent(l4)
+        expect(l3).toBeTruthy()
+        const l2 = getParent(l3)
+        expect(l2).toBeTruthy()
+        const l1 = getParent(l2)
+        expect(l1).toBeTruthy()
+
+        expect(l1).toBe(rootL1)
+        expect(l2).toBe(rootL1.l2)
+        expect(l3).toBe(rootL1.l2.l3)
+        expect(l4).toBe(rootL1.l2.l3.l4)
+    }
+})
+
+test("it should emit patches when applySnapshot is used", () => {
+    const { Factory } = createTestFactories()
+    const doc = Factory.create()
+    let patches: IJsonPatch[] = []
+    onPatch(doc, patch => patches.push(patch))
+    applySnapshot(doc, { ...getSnapshot(doc), to: "universe" })
+    expect(patches).toEqual([{ op: "replace", path: "/to", value: "universe" }])
+})
+
+test("isAlive must be reactive", () => {
+    const Todo = types.model({ text: types.string })
+    const TodoStore = types.model({
+        todos: types.array(Todo),
+        todo: types.maybe(Todo)
+    })
+
+    const store = TodoStore.create({
+        todos: [{ text: "1" }, { text: "2" }],
+        todo: { text: "3" }
+    })
+    unprotect(store)
+
+    const t1 = store.todos[0]!
+    const t2 = store.todos[1]!
+    const t3 = store.todo!
+
+    let calls = 0
+    const r1 = reaction(
+        () => isAlive(t1),
+        v => {
+            expect(v).toBe(false)
+            calls++
+        }
+    )
+    const r2 = reaction(
+        () => isAlive(t2),
+        v => {
+            expect(v).toBe(false)
+            calls++
+        }
+    )
+    const r3 = reaction(
+        () => isAlive(t3),
+        v => {
+            expect(v).toBe(false)
+            calls++
+        }
+    )
+
+    try {
+        store.todos = cast([])
+        store.todo = undefined
+
+        expect(calls).toBe(3)
+    } finally {
+        r1()
+        r2()
+        r3()
+    }
+})
+
+test("#1112 - identifier cache should be cleared for unaccessed wrapped objects", () => {
+    const mock1 = [{ id: "1", name: "Kate" }, { id: "2", name: "John" }]
+    const mock2 = [{ id: "3", name: "Andrew" }, { id: "2", name: "John" }]
+
+    const mock1_2 = mock1.map((i, index) => ({ text: `Text${index}`, entity: i }))
+    const mock2_2 = mock2.map((i, index) => ({ text: `Text${index}`, entity: i }))
+
+    const Entity = types.model({
+        id: types.identifier,
+        name: types.string
+    })
+
+    const Wrapper = types.model({
+        text: types.string,
+        entity: Entity
+    })
+
+    const Store = types
+        .model({
+            list: types.optional(types.array(Wrapper), []),
+            selectedId: 2
+        })
+        .views(self => ({
+            get selectedEntity() {
+                return resolveIdentifier(Entity, self, self.selectedId)
+            }
+        }))
+
+    const store = Store.create()
+    unprotect(store)
+
+    store.list.replace(mock1_2)
+    store.list.replace(mock2_2)
+
+    expect(store.selectedEntity!.id).toBe("2")
+})

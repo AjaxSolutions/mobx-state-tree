@@ -2,13 +2,16 @@ import {
     types,
     getSnapshot,
     unprotect,
-    IType,
     getRoot,
     getParent,
     SnapshotOrInstance,
     cast,
     SnapshotIn,
-    Instance
+    Instance,
+    castToSnapshot,
+    IType,
+    isStateTreeNode,
+    isFrozenType
 } from "../../src"
 
 const createTestFactories = () => {
@@ -255,7 +258,7 @@ test("types instances with compatible snapshots should not be interchangeable", 
         c.x = undefined
     }).not.toThrow()
     expect(() => {
-        ;(c as any).x = {}
+        c.x = cast({})
     }).not.toThrow()
     expect(() => {
         c.x = A.create()
@@ -386,6 +389,61 @@ test("it should type compose correctly", () => {
     x.drive()
     x.log("z")
 })
+test("it should extend {pre,post}ProcessSnapshot on compose", () => {
+    const CompositionTracker = types
+        .model({
+            composedOf: types.array(types.string),
+            composedWith: types.array(types.string)
+        })
+        .preProcessSnapshot(snapshot => ({
+            ...snapshot,
+            composedOf: (snapshot.composedOf || []).concat("CompositionTracker")
+        }))
+        .postProcessSnapshot(snapshot => ({
+            ...snapshot,
+            composedWith: (snapshot.composedWith || []).concat("WagonTracker")
+        }))
+    const Car = types
+        .model({})
+        .preProcessSnapshot(snapshot => ({
+            ...snapshot,
+            composedOf: ((snapshot as any).composedOf || []).concat("Car")
+        }))
+        .postProcessSnapshot(snapshot => ({
+            ...snapshot,
+            composedWith: ((snapshot as any).composedWith || []).concat("Wagon")
+        }))
+    const Logger = types
+        .model({})
+        .preProcessSnapshot(snapshot => ({
+            ...snapshot,
+            composedOf: ((snapshot as any).composedOf || []).concat("CarLogger")
+        }))
+        .postProcessSnapshot(snapshot => ({
+            ...snapshot,
+            composedWith: ((snapshot as any).composedWith || []).concat("WagonLogger")
+        }))
+
+    const LoggableCar = types
+        .compose(
+            CompositionTracker,
+            Car,
+            Logger
+        )
+        .props({
+            composedOf: types.array(types.string),
+            composedWith: types.array(types.string)
+        })
+    const x = LoggableCar.create({})
+    expect(x.composedOf).toContain("CompositionTracker")
+    expect(x.composedOf).toContain("Car")
+    expect(x.composedOf).toContain("CarLogger")
+    expect(x.composedOf).toEqual(["CompositionTracker", "Car", "CarLogger"])
+    expect(getSnapshot(x).composedWith).toContain("WagonTracker")
+    expect(getSnapshot(x).composedWith).toContain("Wagon")
+    expect(getSnapshot(x).composedWith).toContain("WagonLogger")
+    expect(getSnapshot(x).composedWith).toEqual(["WagonTracker", "Wagon", "WagonLogger"])
+})
 test("it should extend types correctly", () => {
     const Car = types
         .model({
@@ -434,31 +492,6 @@ test("self referring views", () => {
         return views
     })
     expect(Car.create().tripple).toBe(9)
-})
-
-test("Alternative typeof syntax #885", () => {
-    const Car = types
-        .model({
-            wheels: 3
-        })
-        .actions(self => {
-            function drive() {}
-            return {
-                drive
-            }
-        })
-
-    type TypeOf<T extends IType<any, any, any>> = T extends IType<any, any, infer T2> ? T2 : never
-    type SnapshotTypeOf<T extends IType<any, any, any>> = T extends IType<any, infer S, any>
-        ? S
-        : never
-    type CreationTypeOf<T extends IType<any, any, any>> = T extends IType<infer C, any, any>
-        ? C
-        : never
-
-    type CarT = TypeOf<typeof Car>
-    type Car2 = typeof Car.Type
-    type CarSnapshot = SnapshotTypeOf<typeof Car>
 })
 
 test("#922", () => {
@@ -570,8 +603,13 @@ test("#923", () => {
 test("snapshot type of reference must be string | number", () => {
     const M = types.model({ id: types.identifier, a: "bar" })
     const R = types.reference(M)
-    const r = R.create(M.create({ id: "5" }))
-    const sn: string | number = getSnapshot(r)
+
+    const S = types.model({ realM: M, refM: R })
+    const s = S.create({
+        realM: { id: "5" },
+        refM: "5"
+    })
+    const sn: string | number = getSnapshot(s.refM)
 })
 
 test("#951", () => {
@@ -648,7 +686,10 @@ test("cast and SnapshotOrInstance", () => {
             setArr2(nn: SnapshotOrInstance<typeof NumberArray>) {
                 self.arr = cast(nn)
             },
-            setArr3(nn: number[]) {
+            setArr3(nn: SnapshotIn<typeof NumberArray>) {
+                self.arr = cast(nn)
+            },
+            setArr31(nn: number[]) {
                 self.arr = cast(nn)
             },
             setArr4() {
@@ -664,7 +705,10 @@ test("cast and SnapshotOrInstance", () => {
             setMap2(nn: SnapshotOrInstance<typeof NumberMap>) {
                 self.map = cast(nn)
             },
-            setMap3(nn: { [k: string]: number }) {
+            setMap3(nn: SnapshotIn<typeof NumberMap>) {
+                self.map = cast(nn)
+            },
+            setMap31(nn: { [k: string]: number }) {
                 self.map = cast(nn)
             },
             setMap4() {
@@ -674,27 +718,56 @@ test("cast and SnapshotOrInstance", () => {
             }
         }))
 
-    const C = types.model({ a: A }).actions(self => ({
-        // for submodels, using typeof self.var
-        setA(na: SnapshotOrInstance<typeof self.a>) {
-            self.a = cast(na)
-        },
-        // for submodels, using the type directly
-        setA2(na: SnapshotOrInstance<typeof A>) {
-            self.a = cast(na)
-        },
-        setA3(na: SnapshotIn<typeof A>) {
-            self.a = cast(na)
-        },
-        setA4(na: Instance<typeof self.a>) {
-            self.a = cast(na)
-        },
-        setA5() {
-            // it works even without specifying the target type, magic!
-            self.a = cast({ n2: 5 })
-            self.a = cast(A.create({ n2: 5 }))
-        }
-    }))
+    const C = types
+        .model({ a: A, maybeA: types.maybe(A), maybeNullA: types.maybeNull(A) })
+        .actions(self => ({
+            // for submodels, using typeof self.var
+            setA(na: SnapshotOrInstance<typeof self.a>) {
+                self.a = cast(na)
+                // we just want to check it compiles
+                if (0 !== 0) {
+                    self.maybeA = cast(na)
+                    self.maybeNullA = cast(na)
+                }
+            },
+            // for submodels, using the type directly
+            setA2(na: SnapshotOrInstance<typeof A>) {
+                self.a = cast(na)
+                // we just want to check it compiles
+                if (0 !== 0) {
+                    self.maybeA = cast(na)
+                    self.maybeNullA = cast(na)
+                }
+            },
+            setA3(na: SnapshotIn<typeof A>) {
+                self.a = cast(na)
+                // we just want to check it compiles
+                if (0 !== 0) {
+                    self.maybeA = cast(na)
+                    self.maybeNullA = cast(na)
+                }
+            },
+            setA4(na: Instance<typeof self.a>) {
+                self.a = cast(na)
+                // we just want to check it compiles
+                if (0 !== 0) {
+                    self.maybeA = cast(na)
+                    self.maybeNullA = cast(na)
+                }
+            },
+            setA5() {
+                // it works even without specifying the target type, magic!
+                self.a = cast({ n2: 5 })
+                self.a = cast(A.create({ n2: 5 }))
+                // we just want to check it compiles
+                if (0 !== 0) {
+                    self.maybeA = cast({ n2: 5 })
+                    self.maybeA = cast(A.create({ n2: 5 }))
+                    self.maybeNullA = cast({ n2: 5 })
+                    self.maybeNullA = cast(A.create({ n2: 5 }))
+                }
+            }
+        }))
 
     const c = C.create({ a: { n2: 5 } })
     unprotect(c)
@@ -739,14 +812,15 @@ test("cast and SnapshotOrInstance", () => {
     unprotect(map)
     map.set("a", cast({ n2: 5 })) // not really needed in this case, but whatever :)
 
-    // and the best part, it actually doesn't work outside assignments :DDDD
-    // all this fails to compile
-    // cast([])
-    // cast({a:5})
-    // cast(NumberArray.create([]))
-    // cast(A.create({n2: 5}))
-    // cast({a: 2, b: 5})
-    // cast(NumberMap({a: 2, b: 3}))
+    // this does not compile, yay!
+    /*
+    cast([])
+    cast({ a: 5 })
+    cast(NumberArray.create([]))
+    cast(A.create({ n2: 5 }))
+    cast({ a: 2, b: 5 })
+    cast(NumberMap.create({ a: 2, b: 3 }))
+    */
 })
 
 test("#994", () => {
@@ -755,5 +829,125 @@ test("#994", () => {
         name: types.maybe(types.string)
     })
 
-    types.reference(Cinema) // should compile ok on TS3
+    const ref = types.reference(Cinema) // should compile ok on TS3
+})
+
+test("castToSnapshot", () => {
+    const firstModel = types.model({ brew1: types.map(types.number) })
+    const secondModel = types.model({ brew2: types.map(firstModel) }).actions(self => ({ do() {} }))
+    const appMod = types.model({ aaa: secondModel })
+
+    const storeSnapshot: SnapshotIn<typeof secondModel> = {
+        brew2: { outside: { brew1: { inner: 222 } } }
+    }
+    const storeInstance = secondModel.create(storeSnapshot)
+    const storeSnapshotOrInstance1: SnapshotOrInstance<typeof secondModel> = secondModel.create(
+        storeSnapshot
+    )
+    const storeSnapshotOrInstance2: SnapshotOrInstance<typeof secondModel> = storeSnapshot
+
+    appMod.create({ aaa: castToSnapshot(storeInstance) })
+    appMod.create({ aaa: castToSnapshot(storeSnapshot) })
+    appMod.create({ aaa: castToSnapshot(storeSnapshotOrInstance1) })
+    appMod.create({ aaa: castToSnapshot(storeSnapshotOrInstance2) })
+    // appMod.create({ aaa: castToSnapshot(5) }) // should not compile
+})
+
+test("create correctly chooses if the snapshot is needed or not - #920", () => {
+    const X = types.model({
+        test: types.string
+    })
+    const T = types.model({
+        test: types.refinement(X, s => s.test.length > 5)
+    })
+    // T.create() // manual test: expects compilation error
+    // T.create({}) // manual test: expects compilation error
+    T.create({
+        test: { test: "hellothere" }
+    })
+
+    const T2 = types.model({
+        test: types.maybe(X)
+    })
+    T2.create() // ok
+    T2.create({}) // ok
+
+    const A = types.model({
+        test: "bla"
+    })
+    A.create() // ok
+    A.create({}) // ok
+
+    const B = types.array(types.string)
+    B.create() // ok
+    B.create(["hi"]) // ok
+
+    const C = types.map(types.string)
+    C.create() // ok
+    C.create({ hi: "hi" }) // ok
+
+    const D = types.number
+    // D.create() // manual test: expects compilation error
+    D.create(5) // ok
+
+    const E = types.optional(types.number, 5)
+    E.create() // ok
+    E.create(6) // ok
+
+    const F = types.frozen<number>()
+    // F.create() // manual test: compilation error
+    F.create(6) // ok
+
+    const FF = types.frozen<number | undefined>()
+    FF.create() // ok
+    FF.create(undefined) // ok
+
+    const G = types.frozen(5)
+    G.create() // ok
+    G.create(6) // ok
+
+    const H = types.frozen<any>(5)
+    H.create() // ok
+    H.create(6) // ok
+
+    const I = types.optional(types.frozen<number>(), 6)
+    I.create()
+    I.create(7)
+})
+
+test("#1117", () => {
+    const Failsafe = <C, S, T>(
+        t: IType<C, S, T>,
+        handleProblem: (
+            value: C,
+            validationError: ReturnType<IType<C, S, T>["validate"]>
+        ) => void = (value, error) => {
+            console.error("Skipping value: typecheck error on", value)
+            console.error(error)
+        }
+    ) =>
+        types.custom<C, T | null>({
+            name: `Failsafe<${t.name}>`,
+            fromSnapshot(snapshot: C) {
+                try {
+                    return t.create(snapshot) // this should compile
+                } catch (e) {
+                    handleProblem(snapshot, e)
+                    return null
+                }
+            },
+            toSnapshot(x) {
+                if (isStateTreeNode(x)) return getSnapshot(x)
+                return (x as any) as C
+            },
+            isTargetType(v) {
+                if (isFrozenType(t)) {
+                    return t.is(v)
+                }
+                return false
+            },
+            getValidationMessage() {
+                return ""
+            }
+        })
 })

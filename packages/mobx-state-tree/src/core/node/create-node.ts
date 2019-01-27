@@ -2,7 +2,7 @@ import { INode, fail, ObjectNode, ScalarNode, IType, getStateTreeNodeSafe } from
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function createNode<C, S, T>(
     type: IType<C, S, T>,
@@ -18,7 +18,7 @@ export function createNode<C, S, T>(
             return existingNode
         }
 
-        fail(
+        throw fail(
             `Cannot add an object to a state tree if it is already part of the same or another state tree. Tried to assign an object to '${
                 parent ? parent.path : ""
             }/${subpath}', but it lives already at '${existingNode.path}'`
@@ -31,7 +31,7 @@ export function createNode<C, S, T>(
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function isNode(value: any): value is INode {
     return value instanceof ScalarNode || value instanceof ObjectNode

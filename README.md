@@ -1,22 +1,13 @@
+<img src="docs/mobx-state-tree-logo-gradient.png" alt="logo" height="120" align="right" />
+
+# mobx-state-tree
+
+_Opinionated, transactional, MobX powered state container combining the best features of the immutable and mutable world for an optimal DX_
+
 [![npm version](https://badge.fury.io/js/mobx-state-tree.svg)](https://badge.fury.io/js/mobx-state-tree)
 [![Build Status](https://travis-ci.org/mobxjs/mobx-state-tree.svg?branch=master)](https://travis-ci.org/mobxjs/mobx-state-tree)
 [![Coverage Status](https://coveralls.io/repos/github/mobxjs/mobx-state-tree/badge.svg?branch=master)](https://coveralls.io/github/mobxjs/mobx-state-tree?branch=master)
 [![Join the community on Spectrum](https://withspectrum.github.io/badge/badge.svg)](https://spectrum.chat/mobx-state-tree)
-
-</br>
-
-<p>
-  <img src="docs/mobx-state-tree-logo-gradient.svg" align="left" height="145" width="100"
-style="margin-right: 20px"/>
-  <h4 style="margin: 0;">mobx-state-tree</h4>
-  <p>
-    <i>
-  Opinionated, transactional, MobX powered state container combining the best features of the immutable and mutable world   for an optimal DX
-    </i>
-  </p>
-</p>
-
-</br>
 
 > Mobx and MST are amazing pieces of software, for me it is the missing brick when you build React based apps. Thanks for the great work!
 
@@ -54,7 +45,7 @@ MobX state tree is a community driven project, but is looking for active maintai
 -   [Api overview](#api-overview)
 -   [Tips](#tips)
 -   [FAQ](#faq)
--   [Full Api Docs](API.md)
+-   [Full Api Docs](docs/API/README.md)
 -   [Built-in / example middlewares](packages/mst-middlewares/README.md)
 -   [Changelog](changelog.md)
 
@@ -75,7 +66,7 @@ Supported browsers:
 
 # Getting started
 
-See the [Getting started](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/getting-started.md#getting-started) tutorial or follow the free [egghead.io course](https://egghead.io/courses/manage-application-state-with-mobx-state-tree).
+See the [Getting started](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/getting-started.md#getting-started) tutorial or follow the free [egghead.io course](https://egghead.io/courses/manage-application-state-with-mobx-state-tree) (note however that the course is for MST v2, so it might be a bit outdated).
 
 # Talks & blogs
 
@@ -164,6 +155,10 @@ Since MST uses MobX behind the scenes, it integrates seamlessly with [mobx](http
 Even cooler, because it supports snapshots, middleware and replayable actions out of the box, it is possible to replace a Redux store and reducer with a MobX state tree.
 This makes it possible to connect the Redux devtools to MST. See the [Redux / MST TodoMVC example](https://github.com/mobxjs/mobx-state-tree/blob/4c2b19ec4a6a8d74064e4b8a87c0f8b46e97e621/examples/redux-todomvc/src/index.js#L6).
 
+---
+
+For futher reading: the conceptual difference between snapshots, patches and actions in relation to distributing state changes is extensively discussed in this [blog post](https://medium.com/@mweststrate/distributing-state-changes-using-snapshots-patches-and-actions-part-1-2811a2fcd65f)
+
 ![devtools](docs/reduxdevtools.png)
 
 Finally, MST has built-in support for references, identifiers, dependency injection, change recording and circular type definitions (even across files).
@@ -184,7 +179,7 @@ store.removeTodo(0)
 // throws exception in one second for using an stale object!
 ```
 
-Despite all that, you will see that the [API](API.md) is quite straightforward!
+Despite all that, you will see that the [API](docs/API/README.md) is quite straightforward!
 
 ---
 
@@ -245,21 +240,24 @@ An example:
 
 ```javascript
 const TodoStore = types
-    .model("TodoStore", {                             // 1
-        loaded: types.boolean                         // 2
-        endpoint: "http://localhost",                 // 3
-        todos: types.array(Todo),                     // 4
-        selectedTodo: types.reference(Todo)           // 5
+    // 1
+    .model("TodoStore", {
+        loaded: types.boolean, // 2
+        endpoint: "http://localhost", // 3
+        todos: types.array(Todo), // 4
+        selectedTodo: types.reference(Todo) // 5
     })
     .views(self => {
         return {
-            get completedTodos() {                    // 6
+            // 6
+            get completedTodos() {
                 return self.todos.filter(t => t.done)
             },
-            findTodosByUser(user) {                   // 7
+            // 7
+            findTodosByUser(user) {
                 return self.todos.filter(t => t.assignee === user)
             }
-        };
+        }
     })
     .actions(self => {
         return {
@@ -269,7 +267,7 @@ const TodoStore = types
                     title
                 })
             }
-        };
+        }
     })
 ```
 
@@ -428,9 +426,9 @@ Actions are replayable and are therefore constrained in several ways:
 
 Useful methods:
 
--   [`onAction`](API.md#onaction) listens to any action that is invoked on the model or any of its descendants.
--   [`addMiddleware`](API.md#addmiddleware) listens to any action that is invoked on the model or any of its descendants.
--   [`applyAction`](API.md#applyaction) invokes an action on the model according to the given action description
+-   [`onAction`](docs/API/README.md#onaction) listens to any action that is invoked on the model or any of its descendants.
+-   [`addMiddleware`](docs/API/README.md#addmiddleware) adds an interceptor function to any action invoked on the subtree.
+-   [`applyAction`](docs/API/README.md#applyaction) invokes an action on the model according to the given action description
 
 #### Asynchronous actions
 
@@ -464,6 +462,13 @@ someModel.actions(self => {
 
     return { fetchProjects }
 })
+```
+
+Note that, since MST v3.9, TypeScript correctly infers `flow` arguments and usually infers correctly `flow` return types,
+but one exception to this case is when a `Promise` is returned as final value. In this case (and only in this case) this construct needs to be used:
+
+```ts
+return castFlowReturn(somePromise)
 ```
 
 #### Action listeners versus middleware
@@ -615,10 +620,10 @@ console.log(storeInstance.selectedTodo.title)
 -   The identifier property of an object cannot be modified after initialization
 -   Each identifier / type combination should be unique within the entire tree
 -   Identifiers are used to reconcile items inside arrays and maps - wherever possible - when applying snapshots
--   The `map.put()` method can be used to simplify adding objects that have identifiers to [maps](API.md#typesmap)
+-   The `map.put()` method can be used to simplify adding objects that have identifiers to [maps](docs/API/README.md#typesmap)
 -   The primary goal of identifiers is not validation, but reconciliation and reference resolving. For this reason identifiers cannot be defined or updated after creation. If you want to check if some value just looks as an identifier, without providing the above semantics; use something like: `types.refinement(types.string, v => v.match(/someregex/))`
 
-_Tip: If you know the format of the identifiers in your application, leverage `types.refinement` to actively check this, for example the following definition enforces that identifiers of `Car` always start with the string `Car_`:\_
+_Tip: If you know the format of the identifiers in your application, leverage `types.refinement` to actively check this, for example the following definition enforces that identifiers of `Car` always start with the string `"Car_"`:
 
 ```javascript
 const Car = types.model("Car", {
@@ -633,7 +638,7 @@ References are looked up through the entire tree but per type, so identifiers ne
 
 #### Customizable references
 
-The default implementation uses the `identifier` cache to resolve references (See [`resolveIdentifier`](API.md#resolveIdentifier)).
+The default implementation uses the `identifier` cache to resolve references (See [`resolveIdentifier`](docs/API/README.md#resolveIdentifier)).
 However, it is also possible to override the resolve logic and provide your own custom resolve logic.
 This also makes it possible to, for example, trigger a data fetch when trying to resolve the reference ([example](https://github.com/mobxjs/mobx-state-tree/blob/master/packages/mobx-state-tree/__tests__/core/reference-custom.test.ts#L148)).
 
@@ -667,6 +672,78 @@ const s = Store.create({
     users: [{ id: "1", name: "Michel" }, { id: "2", name: "Mattia" }],
     selection: "Mattia"
 })
+```
+
+#### Reference validation: `isValidReference`, `tryReference`, `onInvalidate` hook and `types.safeReference`
+
+Accessing an invalid reference (a reference to a dead/detached node) triggers an exception.
+
+In order to check if a reference is valid, MST offers the `isValidReference(() => ref): boolean` function:
+
+```ts
+const isValid = isValidReference(() => store.myRef)
+```
+
+Also, if you are unsure if a reference is valid or not you can use the `tryReference(() => ref): ref | undefined` function:
+
+```ts
+// the result will be the passed ref if ok, or undefined if invalid
+const maybeValidRef = tryReference(() => store.myRef)
+```
+
+The options parameter for references also accepts an optional `onInvalidated` hook, which will be called when the reference target node that the reference is pointing to is about to be detached/destroyed. It has the following signature:
+
+```ts
+const refWithOnInvalidated = types.reference(Todo, {
+    onInvalidated(event: {
+        // what is causing the target to become invalidated
+        cause: "detach" | "destroy" | "invalidSnapshotReference"
+        // the target that is about to become invalidated (undefined if "invalidSnapshotReference")
+        invalidTarget: STN | undefined
+        // the identifier that is about to become invalidated
+        invalidId: string | number
+        // parent node of the reference (not the reference target)
+        parent: IAnyStateTreeNode
+        // a function to remove the reference from its parent (or set to undefined in the case of models)
+        removeRef: () => void
+        // a function to set our reference to a new target
+        replaceRef: (newRef: STN | null | undefined) => void
+    }) {
+        // do something
+    }
+})
+```
+
+Note that invalidation will only trigger while the reference is attached to a parent (be it a model, an array, a map, etc.).
+
+A default implementation of such `onInvalidated` hook is provided by the `types.safeReference` type. It is like a standard reference, except that once the target node becomes invalidated it will:
+
+-   If its parent is a model: Set its own property to `undefined`
+-   If its parent is an array: Remove itself from the array
+-   If its parent is a map: Remove itself from the map
+
+Strictly speaking it is implemented as
+
+```js
+types.maybe(
+    types.reference(Type, {
+        ...customGetSetIfAvailable,
+        onInvalidated(ev) {
+            ev.removeRef()
+        }
+    })
+)
+```
+
+```js
+const Todo = types.model({ id: types.identifier })
+const Store = types.model({
+    todos: types.array(Todo),
+    selectedTodo: types.safeReference(Todo)
+})
+
+// given selectedTodo points to a valid Todo and that Todo is later removed from the todos
+// array, then selectedTodo will automatically become undefined
 ```
 
 ### Listening to observables, snapshots, patches or actions
@@ -778,11 +855,11 @@ const Store = types
 Some tips:
 
 1.  Note that multiple `actions` calls can be chained. This makes it possible to create multiple closures with their own protected volatile state.
-1.  Although in the above example the `pendingRequest` could be initialized directly in the action initializer, it is recommended to do this in the `afterCreate` hook, which will only once the entire instance has been set up (there might be many action and property initializers for a single type).
+2.  Although in the above example the `pendingRequest` could be initialized directly in the action initializer, it is recommended to do this in the `afterCreate` hook, which will only once the entire instance has been set up (there might be many action and property initializers for a single type).
 
-1.  The above example doesn't actually use the promise. For how to work with promises / asynchronous flows, see the [asynchronous actions](#asynchronous-actions) section above.
+3.  The above example doesn't actually use the promise. For how to work with promises / asynchronous flows, see the [asynchronous actions](#asynchronous-actions) section above.
 
-1.  It is possible to share volatile state between views and actions by using `extend`. `.extend` works like a combination of `.actions` and `.views` and should return an object with a `actions` and `views` field:
+4.  It is possible to share volatile state between views and actions by using `extend`. `.extend` works like a combination of `.actions` and `.views` and should return an object with a `actions` and `views` field:
 
 ```javascript
 const Todo = types.model({}).extend(self => {
@@ -884,7 +961,7 @@ store.todos[0].setTitle("Grab coffee")
 <i><a style="color: white; background:cornflowerblue;padding:5px;margin:5px;border-radius:2px" href="https://egghead.io/lessons/react-more-mobx-state-tree-types-map-literal-union-and-enumeration">egghead.io lesson 11: More mobx-state-tree Types: map, literal, union, and enumeration</a></i><br>
 <i><a style="color: white; background:cornflowerblue;padding:5px;margin:5px;border-radius:2px" href="https://egghead.io/lessons/react-create-dynamic-types-and-use-type-composition-to-extract-common-functionality">egghead.io lesson 17: Create Dynamic Types and use Type Composition to Extract Common Functionality</a></i>
 
-These are the types available in MST. All types can be found in the `types` namespace, e.g. `types.string`. See [Api Docs](API.md) for examples.
+These are the types available in MST. All types can be found in the `types` namespace, e.g. `types.string`. See [Api Docs](docs/API/README.md) for examples.
 
 ## Complex types
 
@@ -905,7 +982,7 @@ Note that since MST v3 `types.array` and `types.map` are wrapped in `types.optio
 
 ## Utility types
 
--   `types.union(dispatcher?, types...)` create a union of multiple types. If the correct type cannot be inferred unambiguously from a snapshot, provide a dispatcher function of the form `(snapshot) => Type`.
+-   `types.union(options?: { dispatcher?: (snapshot) => Type, eager?: boolean }, types...)` create a union of multiple types. If the correct type cannot be inferred unambiguously from a snapshot, provide a dispatcher function to determine the type. When `eager` flag is set to `true` (default) - the first matching type will be used, if set to `false` the type check will pass only if exactly 1 type matches.
 -   `types.optional(type, defaultValue)` marks an value as being optional (in e.g. a model). If a value is not provided the `defaultValue` will be used instead. If `defaultValue` is a function, it will be evaluated. This can be used to generate, for example, IDs or timestamps upon creation.
 -   `types.literal(value)` can be used to create a literal type, where the only possible value is specifically that value. This is very powerful in combination with `union`s. E.g. `temperature: types.union(types.literal("hot"), types.literal("cold"))`.
 -   `types.enumeration(name?, options: string[])` creates an enumeration. This method is a shorthand for a union of string literals. If you are using typescript and want to create a type based on an string enum (e.g. `enum Color { ... }`) then use `types.enumeration<Color>("Color", Object.values(Color))`, where the `"Color"` name argument is optional.
@@ -915,8 +992,15 @@ Note that since MST v3 `types.array` and `types.map` are wrapped in `types.optio
 -   `types.null` the type of `null`.
 -   `types.undefined` the type of `undefined`.
 -   `types.late(() => type)` can be used to create recursive or circular types, or types that are spread over files in such a way that circular dependencies between files would be an issue otherwise.
--   `types.frozen` Accepts any kind of serializable value (both primitive and complex), but assumes that the value itself is **immutable** and **serializable**.
+-   `types.frozen(subType? | defaultValue?)` Accepts any kind of serializable value (both primitive and complex), but assumes that the value itself is **immutable** and **serializable**.
+    `frozen` can be invoked in a few different ways:
+    -   `types.frozen()` - behaves the same as types.frozen in MST 2.
+    -   `types.frozen(subType)` - provide a valid MST type and frozen will check if the provided data conforms the snapshot for that type. Note that the type will not actually be instantiated, so it can only be used to check the shape of the data. Adding views or actions to SubType would be pointless.
+    -   `types.frozen(someDefaultValue)` - provide a primitive value, object or array, and MST will infer the type from that object, and also make it the default value for the field
+    -   (Typescript) `types.frozen<TypeScriptType>(...)` - provide a typescript type, to help in strongly typing the field (design time only)
 -   `types.compose(name?, type1...typeX)`, creates a new model type by taking a bunch of existing types and combining them into a new one.
+-   `types.reference(targetType)` creates a property that is a reference to another item of the given `targetType` somewhere in the same tree. See [references](#references) for more details.
+-   `types.safeReference(targetType)` is like a standard reference, except that it accepts the undefined value by default and automatically sets itself to undefined (when the parent is a model) / removes itself from arrays and maps when the reference it is pointing to gets detached/destroyed. See [references](#references) for more details.
 
 ## Property types
 
@@ -924,7 +1008,6 @@ Property types can only be used as a direct member of a `types.model` type and n
 
 -   `types.identifier` Only one such member can exist in a `types.model` and should uniquely identify the object. See [identifiers](#identifiers) for more details. `subType` should be either `types.string` or `types.number`, defaulting to the first if not specified.
 -   `types.identifierNumber` Similar to `types.identifier`. However, during serialization, the identifier value will be parsed from / serialized to a number.
--   `types.reference(targetType)` creates a property that is a reference to another item of the given `targetType` somewhere in the same tree. See [references](#references) for more details.
 
 ## LifeCycle hooks for `types.model`
 
@@ -958,87 +1041,94 @@ types
 
 Note: pre and post processing are just meant to convert your data into types that are more acceptable to MST. Typically it should be the case that `postProcess(preProcess(snapshot)) === snapshot. If that isn't the case, consider whether you shouldn't be using a dedicated a view instead to normalize your snapshot to some other format you need.
 
-| Hook                  | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hook                  | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `preProcessSnapshot`  | Before creating an instance or applying a snapshot to an existing instance, this hook is called to give the option to transform the snapshot before it is applied. The hook should be a _pure_ function that returns a new snapshot. This can be useful to do some data conversion, enrichment, property renames, etc. This hook is not called for individual property updates. _\*\*Note 1: Unlike the other hooks, this one is \_not_ created as part of the `actions` initializer, but directly on the type!**\_ \_**Note 2: The `preProcessSnapshot` transformation must be pure; it should not modify its original input argument!\*\*\_ |
-| `afterCreate`         | Immediately after an instance is created and initial values are applied. Children will fire this event before parents. You can't make assumptions about the parent safely, use `afterAttach` if you need to.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `afterAttach`         | As soon as the _direct_ parent is assigned (this node is attached to another node). If an element is created as part of a parent, `afterAttach` is also fired. Unlike `afterCreate`, `afterAttach` will fire breadth first. So, in `afterAttach` one can safely make assumptions about the parent, but in `afterCreate` not                                                                                                                                                                                                                                                                                                                  |
-| `postProcessSnapshot` | This hook is called every time a new snapshot is being generated. Typically it is the inverse function of `preProcessSnapshot`. This function should be a pure function that returns a new snapshot. _\*\*Note: Unlike the other hooks, this one is \_not_ created as part of the `actions` initializer, but directly on the type!\*\*\_                                                                                                                                                                                                                                                                                                     |
-| `beforeDetach`        | As soon as the node is removed from the _direct_ parent, but only if the node is _not_ destroyed. In other words, when `detach(node)` is used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `beforeDestroy`       | Called before the node is destroyed, as a result of calling `destroy`, or by removing or replacing the node from the tree. Child destructors will fire before parents                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `afterCreate`         | Immediately after an instance is created and initial values are applied. Children will fire this event before parents. You can't make assumptions about the parent safely, use `afterAttach` if you need to.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `afterAttach`         | As soon as the _direct_ parent is assigned (this node is attached to another node). If an element is created as part of a parent, `afterAttach` is also fired. Unlike `afterCreate`, `afterAttach` will fire breadth first. So, in `afterAttach` one can safely make assumptions about the parent, but in `afterCreate` not                                                                                                                                                                                                                                                                                                                   |
+| `postProcessSnapshot` | This hook is called every time a new snapshot is being generated. Typically it is the inverse function of `preProcessSnapshot`. This function should be a pure function that returns a new snapshot. _\*\*Note: Unlike the other hooks, this one is \_not_ created as part of the `actions` initializer, but directly on the type!\*\*\_                                                                                                                                                                                                                                                                                                      |
+| `beforeDetach`        | As soon as the node is removed from the _direct_ parent, but only if the node is _not_ destroyed. In other words, when `detach(node)` is used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `beforeDestroy`       | Called before the node is destroyed, as a result of calling `destroy`, or by removing or replacing the node from the tree. Child destructors will fire before parents                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
-Note, except for `preProcessSnapshot`, all hooks should be defined as actions.
+Note, except for `preProcessSnapshot` and `postProcessSnapshot`, all hooks should be defined as actions.
 
 All hooks can be defined multiple times and can be composed automatically.
 
 # Api overview
 
-See the [full API docs](API.md) for more details.
+See the [full API docs](docs/API/README.md) for more details.
 
-| signature                                                                                                 |                                                                                                                                                                                                                                                       |
-| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`addDisposer(node, () => void)`](API.md#adddisposer)                                                     | Function to be invoked whenever the target node is to be destroyed                                                                                                                                                                                    |
-| [`addMiddleware(node, middleware: (actionDescription, next) => any, includeHooks)`](API.md#addmiddleware) | Attaches middleware to a node. See [middleware](docs/middleware.md). Returns disposer.                                                                                                                                                                |
-| [`applyAction(node, actionDescription)`](API.md#applyaction)                                              | Replays an action on the targeted node                                                                                                                                                                                                                |
-| [`applyPatch(node, jsonPatch)`](API.md#applypatch)                                                        | Applies a JSON patch, or array of patches, to a node in the tree                                                                                                                                                                                      |
-| [`cast(nodeOrSnapshot)`](API.md#cast)                                                                     | Cast a node instance or snapshot to a node so it can be used in assignment operations                                                                                                                                                                 |
-| [`applySnapshot(node, snapshot)`](API.md#applysnapshot)                                                   | Updates a node with the given snapshot                                                                                                                                                                                                                |
-| [`createActionTrackingMiddleware`](API.md#createactiontrackingmiddleware)                                 | Utility to make writing middleware that tracks async actions less cumbersome                                                                                                                                                                          |
-| [`clone(node, keepEnvironment?: true \| false \| newEnvironment)`](API.md#clone)                          | Creates a full clone of the given node. By default preserves the same environment                                                                                                                                                                     |
-| [`decorate(handler, function)`](API.md#decorate)                                                          | Attaches middleware to a specific action (or flow)                                                                                                                                                                                                    |
-| [`destroy(node)`](API.md#destroy)                                                                         | Kills `node`, making it unusable. Removes it from any parent in the process                                                                                                                                                                           |
-| [`detach(node)`](API.md#detach)                                                                           | Removes `node` from its current parent, and lets it live on as standalone tree                                                                                                                                                                        |
-| [`flow(generator)`](API.md#flow)                                                                          | creates an asynchronous flow based on a generator function                                                                                                                                                                                            |
-| [`getChildType(node, property?)`](API.md#getchildtype)                                                    | Returns the declared type of the given `property` of `node`. For arrays and maps `property` can be omitted as they all have the same type                                                                                                             |
-| [`getEnv(node)`](API.md#getenv)                                                                           | Returns the environment of `node`, see [environments](#environments)                                                                                                                                                                                  |
-| [`getParent(node, depth=1)`](API.md#getparent)                                                            | Returns the intermediate parent of the `node`, or a higher one if `depth > 1`                                                                                                                                                                         |
-| [`getParentOfType(node, type)`](API.md#getparentoftype)                                                   | Return the first parent that satisfies the provided type                                                                                                                                                                                              |
-| [`getPath(node)`](API.md#getpath)                                                                         | Returns the path of `node` in the tree                                                                                                                                                                                                                |
-| [`getPathParts(node)`](API.md#getpathparts)                                                               | Returns the path of `node` in the tree, unescaped as separate parts                                                                                                                                                                                   |
-| [`getRelativePath(base, target)`](API.md#getrelativepath)                                                 | Returns the short path, which one could use to walk from node `base` to node `target`, assuming they are in the same tree. Up is represented as `../`                                                                                                 |
-| [`getRoot(node)`](API.md#getroot)                                                                         | Returns the root element of the tree containing `node`                                                                                                                                                                                                |
-| [`getIdentifier(node)`](API.md#getidentifier)                                                             | Returns the identifier of the given element                                                                                                                                                                                                           |
-| [`getSnapshot(node, applyPostProcess)`](API.md#getsnapshot)                                               | Returns the snapshot of the `node`. See [snapshots](#snapshots)                                                                                                                                                                                       |
-| [`getType(node)`](API.md#gettype)                                                                         | Returns the type of `node`                                                                                                                                                                                                                            |
-| [`hasParent(node, depth=1)`](API.md#hasparent)                                                            | Returns `true` if `node` has a parent at `depth`                                                                                                                                                                                                      |
-| [`hasParentOfType(node, type)`](API.md#hasparentoftype)                                                   | Returns `true` if the `node` has a parent that satisfies the provided type                                                                                                                                                                            |
-| [`isAlive(node)`](API.md#isalive)                                                                         | Returns `true` if `node` is alive                                                                                                                                                                                                                     |
-| [`isStateTreeNode(value)`](API.md#isstatetreenode)                                                        | Returns `true` if `value` is a node of a mobx-state-tree                                                                                                                                                                                              |
-| [`isProtected(value)`](API.md#isprotected)                                                                | Returns `true` if the given node is protected, see [actions](#actions)                                                                                                                                                                                |
-| [`isRoot(node)`](API.md#isroot)                                                                           | Returns true if `node` has no parents                                                                                                                                                                                                                 |
-| [`joinJsonPath(parts)`](API.md#joinjsonpath)                                                              | Joins and escapes the given path `parts` into a JSON path                                                                                                                                                                                             |
-| [`onAction(node, (actionDescription) => void)`](API.md#onaction)                                          | A built-in middleware that calls the provided callback with an action description upon each invocation. Returns disposer                                                                                                                              |
-| [`onPatch(node, (patch) => void)`](API.md#onpatch)                                                        | Attach a JSONPatch listener, that is invoked for each change in the tree. Returns disposer                                                                                                                                                            |
-| [`onSnapshot(node, (snapshot) => void)`](API.md#onsnapshot)                                               | Attach a snapshot listener, that is invoked for each change in the tree. Returns disposer                                                                                                                                                             |
-| [`process(generator)`](API.md#process)                                                                    | `DEPRECATED` – replaced with [flow](API.md#flow)                                                                                                                                                                                                      |
-| [`protect(node)`](API.md#protect)                                                                         | Protects an unprotected tree against modifications from outside actions                                                                                                                                                                               |
-| [`recordActions(node)`](API.md#recordactions)                                                             | Creates a recorder that listens to all actions in `node`. Call `.stop()` on the recorder to stop this, and `.replay(target)` to replay the recorded actions on another tree                                                                           |
-| [`recordPatches(node)`](API.md#recordpatches)                                                             | Creates a recorder that listens to all patches emitted by the node. Call `.stop()` on the recorder to stop this, and `.replay(target)` to replay the recorded patches on another tree                                                                 |
-| [`getMembers(node)`](API.md#getMembers)                                                                   | Returns the model name, properties, actions, views, volatiles                                                                                                                                                                                         |
-| [`resolve(node, path)`](API.md#resolve)                                                                   | Resolves a `path` (json path) relatively to the given `node`                                                                                                                                                                                          |
-| [`resolveIdentifier(type, target, identifier)`](API.md#resolveidentifier)                                 | resolves an identifier of a given type in a model tree                                                                                                                                                                                                |
-| [`resolvePath(target, path)`](API.md#resolvepath)                                                         | resolves a JSON path, starting at the specified target                                                                                                                                                                                                |
-| [`setLivelynessChecking("warn" \| "ignore" \| "error")`](API.md#setlivelynesschecking)                    | Defines what MST should do when running into reads / writes to objects that have died. By default it will print a warning. Use te `"error"` option to easy debugging to see where the error was thrown and when the offending read / write took place |
-| [`splitJsonPath(path)`](API.md#splitjsonpath)                                                             | Splits and unescapes the given JSON `path` into path parts                                                                                                                                                                                            |
-| [`typecheck(type, value)`](API.md#typecheck)                                                              | Typechecks a value against a type. Throws on errors. Use this if you need typechecks even in a production build.                                                                                                                                      |
-| [`tryResolve(node, path)`](API.md#tryresolve)                                                             | Like `resolve`, but just returns `null` if resolving fails at any point in the path                                                                                                                                                                   |
-| [`unprotect(node)`](API.md#unprotect)                                                                     | Unprotects `node`, making it possible to directly modify any value in the subtree, without actions                                                                                                                                                    |
-| [`walk(startNode, (node) => void)`](API.md#walk)                                                          | Performs a depth-first walk through a tree                                                                                                                                                                                                            |
-| [`escapeJsonPath(path)`](API.md#escapejsonpath)                                                           | escape special characters in an identifier, according to http://tools.ietf.org/html/rfc6901                                                                                                                                                           |
-| [`unescapeJsonPath(path)`](API.md#unescapejsonpath)                                                       | escape special characters in an identifier, according to http://tools.ietf.org/html/rfc6901                                                                                                                                                           |
-| [`isType(value)`](API.md#isType)                                                                          | Returns if a given value represents a type.                                                                                                                                                                                                           |
-| [`isArrayType(value)`](API.md#isArrayType)                                                                | Returns if a given value represents an array type.                                                                                                                                                                                                    |
-| [`isFrozenType(value)`](API.md#isFrozenType)                                                              | Returns if a given value represents a frozen type.                                                                                                                                                                                                    |
-| [`isIdentifierType(value)`](API.md#isIdentifierType)                                                      | Returns if a given value represents an identifier type.                                                                                                                                                                                               |
-| [`isLateType(value)`](API.md#isLateType)                                                                  | Returns if a given value represents a late type.                                                                                                                                                                                                      |
-| [`isLiteralType(value)`](API.md#isLiteralType)                                                            | Returns if a given value represents a literal type.                                                                                                                                                                                                   |
-| [`isMapType(value)`](API.md#isMapType)                                                                    | Returns if a given value represents a map type.                                                                                                                                                                                                       |
-| [`isModelType(value)`](API.md#isModelType)                                                                | Returns if a given value represents a model type.                                                                                                                                                                                                     |
-| [`isOptionalType(value)`](API.md#isOptionalType)                                                          | Returns if a given value represents an optional type.                                                                                                                                                                                                 |
-| [`isPrimitiveType(value)`](API.md#isPrimitiveType)                                                        | Returns if a given value represents a primitive type.                                                                                                                                                                                                 |
-| [`isReferenceType(value)`](API.md#isReferenceType)                                                        | Returns if a given value represents a reference type.                                                                                                                                                                                                 |
-| [`isRefinementType(value)`](API.md#isRefinementType)                                                      | Returns if a given value represents a refinement type.                                                                                                                                                                                                |
-| [`isUnionType(value)`](API.md#isUnionType)                                                                | Returns if a given value represents a union type.                                                                                                                                                                                                     |
+| signature                                                                                                             |                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`addDisposer(node, () => void)`](docs/API/README.md#adddisposer)                                                     | Add a function to be invoked whenever the target node is about to be destroyed                                                                                                                                                                        |
+| [`addMiddleware(node, middleware: (actionDescription, next) => any, includeHooks)`](docs/API/README.md#addmiddleware) | Attaches middleware to a node. See [middleware](docs/middleware.md). Returns disposer.                                                                                                                                                                |
+| [`applyAction(node, actionDescription)`](docs/API/README.md#applyaction)                                              | Replays an action on the targeted node                                                                                                                                                                                                                |
+| [`applyPatch(node, jsonPatch)`](docs/API/README.md#applypatch)                                                        | Applies a JSON patch, or array of patches, to a node in the tree                                                                                                                                                                                      |
+| [`applySnapshot(node, snapshot)`](docs/API/README.md#applysnapshot)                                                   | Updates a node with the given snapshot                                                                                                                                                                                                                |
+| [`cast(nodeOrSnapshot)`](docs/API/README.md#cast)                                                                     | Cast a node instance or snapshot to a node instance so it can be used in assignment operations                                                                                                                                                        |
+| [`castToSnapshot(nodeOrSnapshot)`](docs/API/README.md#casttosnapshot)                                                 | Cast a node instance to a snapshot so it can be used inside create operations                                                                                                                                                                         |
+| [`castToReferenceSnapshot(node)`](docs/API/README.md#casttoreferencesnapshot)                                         | Cast a node instance to a reference snapshot so it can be used inside create operations                                                                                                                                                               |
+| [`createActionTrackingMiddleware`](docs/API/README.md#createactiontrackingmiddleware)                                 | Utility to make writing middleware that tracks async actions less cumbersome                                                                                                                                                                          |
+| [`clone(node, keepEnvironment?: true \| false \| newEnvironment)`](docs/API/README.md#clone)                          | Creates a full clone of the given node. By default preserves the same environment                                                                                                                                                                     |
+| [`decorate(handler, function)`](docs/API/README.md#decorate)                                                          | Attaches middleware to a specific action (or flow)                                                                                                                                                                                                    |
+| [`destroy(node)`](docs/API/README.md#destroy)                                                                         | Kills `node`, making it unusable. Removes it from any parent in the process                                                                                                                                                                           |
+| [`detach(node)`](docs/API/README.md#detach)                                                                           | Removes `node` from its current parent, and lets it live on as standalone tree                                                                                                                                                                        |
+| [`flow(generator)`](docs/API/README.md#flow)                                                                          | Creates an asynchronous flow based on a generator function                                                                                                                                                                                            |
+| [`castFlowReturn(value)`](docs/API/README.md#castflowreturn)                                                          | Casts a flow return value so it can be correctly inferred as return type. Only needed when using TypeScript and when returning a Promise.                                                                                                             |
+| [`getChildType(node, property?)`](docs/API/README.md#getchildtype)                                                    | Returns the declared type of the given `property` of `node`. For arrays and maps `property` can be omitted as they all have the same type                                                                                                             |
+| [`getEnv(node)`](docs/API/README.md#getenv)                                                                           | Returns the environment of `node`, see [environments](#environments)                                                                                                                                                                                  |
+| [`getParent(node, depth=1)`](docs/API/README.md#getparent)                                                            | Returns the intermediate parent of the `node`, or a higher one if `depth > 1`                                                                                                                                                                         |
+| [`getParentOfType(node, type)`](docs/API/README.md#getparentoftype)                                                   | Return the first parent that satisfies the provided type                                                                                                                                                                                              |
+| [`getPath(node)`](docs/API/README.md#getpath)                                                                         | Returns the path of `node` in the tree                                                                                                                                                                                                                |
+| [`getPathParts(node)`](docs/API/README.md#getpathparts)                                                               | Returns the path of `node` in the tree, unescaped as separate parts                                                                                                                                                                                   |
+| [`getRelativePath(base, target)`](docs/API/README.md#getrelativepath)                                                 | Returns the short path, which one could use to walk from node `base` to node `target`, assuming they are in the same tree. Up is represented as `../`                                                                                                 |
+| [`getRoot(node)`](docs/API/README.md#getroot)                                                                         | Returns the root element of the tree containing `node`                                                                                                                                                                                                |
+| [`getIdentifier(node)`](docs/API/README.md#getidentifier)                                                             | Returns the identifier of the given element                                                                                                                                                                                                           |
+| [`getSnapshot(node, applyPostProcess)`](docs/API/README.md#getsnapshot)                                               | Returns the snapshot of the `node`. See [snapshots](#snapshots)                                                                                                                                                                                       |
+| [`getType(node)`](docs/API/README.md#gettype)                                                                         | Returns the type of `node`                                                                                                                                                                                                                            |
+| [`hasParent(node, depth=1)`](docs/API/README.md#hasparent)                                                            | Returns `true` if `node` has a parent at `depth`                                                                                                                                                                                                      |
+| [`hasParentOfType(node, type)`](docs/API/README.md#hasparentoftype)                                                   | Returns `true` if the `node` has a parent that satisfies the provided type                                                                                                                                                                            |
+| [`isAlive(node)`](docs/API/README.md#isalive)                                                                         | Returns `true` if `node` is alive                                                                                                                                                                                                                     |
+| [`isStateTreeNode(value)`](docs/API/README.md#isstatetreenode)                                                        | Returns `true` if `value` is a node of a mobx-state-tree                                                                                                                                                                                              |
+| [`isProtected(value)`](docs/API/README.md#isprotected)                                                                | Returns `true` if the given node is protected, see [actions](#actions)                                                                                                                                                                                |
+| [`isValidReference(() => node \| null \| undefined, checkIfAlive = true)`](docs/API/README.md#isvalidreference)       | Tests if a reference is valid (pointing to an existing node and optionally if alive) and returns if the check passes or not.                                                                                                                          |
+| [`isRoot(node)`](docs/API/README.md#isroot)                                                                           | Returns true if `node` has no parents                                                                                                                                                                                                                 |
+| [`joinJsonPath(parts)`](docs/API/README.md#joinjsonpath)                                                              | Joins and escapes the given path `parts` into a JSON path                                                                                                                                                                                             |
+| [`onAction(node, (actionDescription) => void)`](docs/API/README.md#onaction)                                          | A built-in middleware that calls the provided callback with an action description upon each invocation. Returns disposer                                                                                                                              |
+| [`onPatch(node, (patch) => void)`](docs/API/README.md#onpatch)                                                        | Attach a JSONPatch listener, that is invoked for each change in the tree. Returns disposer                                                                                                                                                            |
+| [`onSnapshot(node, (snapshot) => void)`](docs/API/README.md#onsnapshot)                                               | Attach a snapshot listener, that is invoked for each change in the tree. Returns disposer                                                                                                                                                             |
+| [`process(generator)`](docs/API/README.md#process)                                                                    | `DEPRECATED` – replaced with [flow](docs/API/README.md#flow)                                                                                                                                                                                          |
+| [`protect(node)`](docs/API/README.md#protect)                                                                         | Protects an unprotected tree against modifications from outside actions                                                                                                                                                                               |
+| [`recordActions(node)`](docs/API/README.md#recordactions)                                                             | Creates a recorder that listens to all actions in `node`. Call `.stop()` on the recorder to stop this, and `.replay(target)` to replay the recorded actions on another tree                                                                           |
+| [`recordPatches(node)`](docs/API/README.md#recordpatches)                                                             | Creates a recorder that listens to all patches emitted by the node. Call `.stop()` on the recorder to stop this, and `.replay(target)` to replay the recorded patches on another tree                                                                 |
+| [`getMembers(node)`](docs/API/README.md#getMembers)                                                                   | Returns the model name, properties, actions, views, volatiles of a model node instance                                                                                                                                                                |
+| [`getPropertyMembers(typeOrNode)`](docs/API/README.md#getPropertyMembers)                                             | Returns the model name and properties of a model type for either a model type or a model node                                                                                                                                                         |
+| [`resolve(node, path)`](docs/API/README.md#resolve)                                                                   | Resolves a `path` (json path) relatively to the given `node`                                                                                                                                                                                          |
+| [`resolveIdentifier(type, target, identifier)`](docs/API/README.md#resolveidentifier)                                 | resolves an identifier of a given type in a model tree                                                                                                                                                                                                |
+| [`resolvePath(target, path)`](docs/API/README.md#resolvepath)                                                         | resolves a JSON path, starting at the specified target                                                                                                                                                                                                |
+| [`setLivelinessChecking("warn" \| "ignore" \| "error")`](docs/API/README.md#setlivelinesschecking)                    | Defines what MST should do when running into reads / writes to objects that have died. By default it will print a warning. Use te `"error"` option to easy debugging to see where the error was thrown and when the offending read / write took place |
+| [`getLivelinessChecking()`](docs/API/README.md#getlivelinesschecking)                                                 | Returns the current liveliness checking mode.                                                                                                                                                                                                         |
+| [`splitJsonPath(path)`](docs/API/README.md#splitjsonpath)                                                             | Splits and unescapes the given JSON `path` into path parts                                                                                                                                                                                            |
+| [`typecheck(type, value)`](docs/API/README.md#typecheck)                                                              | Typechecks a value against a type. Throws on errors. Use this if you need typechecks even in a production build.                                                                                                                                      |
+| [`tryResolve(node, path)`](docs/API/README.md#tryresolve)                                                             | Like `resolve`, but just returns `null` if resolving fails at any point in the path                                                                                                                                                                   |
+| [`tryReference(() => node | null | undefined, checkIfAlive = true)`](docs/API/README.md#tryreference)                 | Tests if a reference is valid (pointing to an existing node and optionally if alive) and returns such reference if it the check passes, else it returns undefined.                                                                                    |
+| [`unprotect(node)`](docs/API/README.md#unprotect)                                                                     | Unprotects `node`, making it possible to directly modify any value in the subtree, without actions                                                                                                                                                    |
+| [`walk(startNode, (node) => void)`](docs/API/README.md#walk)                                                          | Performs a depth-first walk through a tree                                                                                                                                                                                                            |
+| [`escapeJsonPath(path)`](docs/API/README.md#escapejsonpath)                                                           | escape special characters in an identifier, according to http://tools.ietf.org/html/rfc6901                                                                                                                                                           |
+| [`unescapeJsonPath(path)`](docs/API/README.md#unescapejsonpath)                                                       | escape special characters in an identifier, according to http://tools.ietf.org/html/rfc6901                                                                                                                                                           |
+| [`isType(value)`](docs/API/README.md#isType)                                                                          | Returns if a given value represents a type.                                                                                                                                                                                                           |
+| [`isArrayType(value)`](docs/API/README.md#isArrayType)                                                                | Returns if a given value represents an array type.                                                                                                                                                                                                    |
+| [`isFrozenType(value)`](docs/API/README.md#isFrozenType)                                                              | Returns if a given value represents a frozen type.                                                                                                                                                                                                    |
+| [`isIdentifierType(value)`](docs/API/README.md#isIdentifierType)                                                      | Returns if a given value represents an identifier type.                                                                                                                                                                                               |
+| [`isLateType(value)`](docs/API/README.md#isLateType)                                                                  | Returns if a given value represents a late type.                                                                                                                                                                                                      |
+| [`isLiteralType(value)`](docs/API/README.md#isLiteralType)                                                            | Returns if a given value represents a literal type.                                                                                                                                                                                                   |
+| [`isMapType(value)`](docs/API/README.md#isMapType)                                                                    | Returns if a given value represents a map type.                                                                                                                                                                                                       |
+| [`isModelType(value)`](docs/API/README.md#isModelType)                                                                | Returns if a given value represents a model type.                                                                                                                                                                                                     |
+| [`isOptionalType(value)`](docs/API/README.md#isOptionalType)                                                          | Returns if a given value represents an optional type.                                                                                                                                                                                                 |
+| [`isPrimitiveType(value)`](docs/API/README.md#isPrimitiveType)                                                        | Returns if a given value represents a primitive type.                                                                                                                                                                                                 |
+| [`isReferenceType(value)`](docs/API/README.md#isReferenceType)                                                        | Returns if a given value represents a reference type.                                                                                                                                                                                                 |
+| [`isRefinementType(value)`](docs/API/README.md#isRefinementType)                                                      | Returns if a given value represents a refinement type.                                                                                                                                                                                                |
+| [`isUnionType(value)`](docs/API/README.md#isUnionType)                                                                | Returns if a given value represents a union type.                                                                                                                                                                                                     |
 
 A _disposer_ is a function that cancels the effect for which it was created.
 
@@ -1062,7 +1152,7 @@ The following service can generate MST models based on JSON: https://transform.n
 
 For debugging you might want to use `getSnapshot(model, applyPostProcess)` to print the state of a model. If you didn't import `getSnapshot` while debugging in some debugger, don't worry, `model.toJSON()` will produce the same snapshot. (For API consistency, this feature is not part of the typed API).
 
-### Handle circular dependencies between files using `late`
+### Handle circular dependencies between files and types using `late`
 
 In the exporting file:
 
@@ -1079,10 +1169,25 @@ In the importing file:
 ```javascript
 import { LateStore } from "./circular-dep"
 
-const Store = types.late(LateStore)
+const Store = types.late(() => LateStore)
 ```
 
 Thanks to function hoisting in combination with `types.late`, this lets you have circular dependencies between types, across files.
+
+If you are using TypeScript and you get errors about circular or self-referencing types then you can partially fix it by doing:
+
+```ts
+const Node = types.model({
+    x: 5, // as an example
+    me: types.maybe(types.late((): IAnyModelType => Node))
+})
+```
+
+In this case, while "me" will become any, any other properties (such as x) will be strongly typed, so you can typecast the self referencing properties (me in this case) once more to get typings. For example:
+
+```ts
+node.((me) as Instance<typeof Node>).x // x here will be number
+```
 
 ### Simulate inheritance by using type composition
 
@@ -1170,7 +1275,7 @@ Likewise, if your application mainly processes stateless information (such as a 
 
 MST doesn't offer an any type because it can't reason about it. For example, given a snapshot and a field with `any`, how should MST know how to deserialize it or apply patches to it, etc.? If you need `any`, there are following options:
 
-1.  Use `types.frozen`. Frozen values need to be immutable and serializable (so MST can treat them verbatim)
+1.  Use `types.frozen()`. Frozen values need to be immutable and serializable (so MST can treat them verbatim)
 2.  Use volatile state. Volatile state can store anything, but won't appear in snapshots, patches etc.
 3.  If your type is regular, and you just are too lazy to type the model, you could also consider generating the type at runtime once (after all, MST types are just JS...). However, you will loose static typing, and any confusion it causes is up to you to handle :-).
 
@@ -1206,10 +1311,10 @@ Yes, with MST it is pretty straight forward to setup hot reloading for your stor
 
 ### TypeScript and MST
 
-TypeScript support is best-effort as not all patterns can be expressed in TypeScript. Except for assigning snapshots to properties we get pretty close! As MST uses the latest fancy TypeScript features it is required to use TypeScript 2.8 or later with `noImplicitThis` and `strictNullChecks` enabled.
+TypeScript support is best-effort as not all patterns can be expressed in TypeScript. Except for assigning snapshots to properties we get pretty close! As MST uses the latest fancy TypeScript features it is required to use TypeScript 3.0 or later with `noImplicitThis` and `strictNullChecks` enabled.
 Actually, the more strict options that are enabled, the better the type system will behave.
 
-We recommend using TypeScript together with MST, but since the type system of MST is more dynamic than the TypeScript system, there are cases that cannot be expressed neatly and occassionally you will need to fallback to `any` or manually adding type annotations.
+We recommend using TypeScript together with MST, but since the type system of MST is more dynamic than the TypeScript system, there are cases that cannot be expressed neatly and occasionally you will need to fallback to `any` or manually adding type annotations.
 
 Flow is not supported.
 
@@ -1277,7 +1382,37 @@ const Example = types
     }))
 ```
 
-You can circumvent this situation by declaring the views in two steps:
+You can circumvent this situation by using `this` whenever you intend to use the newly declared computed values that are local to the current object:
+
+```typescript
+const Example = types.model("Example", { prop: types.string }).views(self => ({
+    get upperProp(): string {
+        return self.prop.toUpperCase()
+    },
+    get twiceUpperProp(): string {
+        return this.upperProp + this.upperProp
+    }
+}))
+```
+
+Alternatively you can also declare multiple `.views` block, in which case the `self` parameter gets extended after each block.
+
+```typescript
+const Example = types
+  .model('Example', { prop: types.string })
+  .views(self => {
+    get upperProp(): string {
+      return self.prop.toUpperCase();
+    },
+  }))
+  .views(self => ({
+    get twiceUpperProp(): string {
+      return self.upperProp + self.upperProp;
+    },
+  }));
+```
+
+As a last resort, although not recommended due to the performance penalty (see the note below), you may declare the views in two steps:
 
 ```typescript
 const Example = types
@@ -1295,40 +1430,7 @@ const Example = types
   }))
 ```
 
-_**NOTE: the above approach will incur runtime performance penalty as accessing such computed values (e.g. inside `render()` method of an observed component) always leads to full recompute (see [this issue](https://github.com/mobxjs/mobx-state-tree/issues/818#issue-323164363) for details). For a heavily used computed properties it's recommended to use one of below approaches.**_
-
-Alternatively, you can use `this` whenever you intend to use the newly declared computed values:
-
-```typescript
-const Example = types
-    .model("Example", { prop: types.string })
-    .views(self => ({
-        // use typeof instead of predefined type to avoid circular references
-        get upperProp(): string {
-            return self.prop.toUpperCase()
-        },
-        get twiceUpperProp(): string {
-            return this.upperProp + this.upperProp
-        }
-    }))
-```
-
-Note that you can also declare multiple `.views` block, in which case the `self` parameter gets extended after each block.
-
-```typescript
-const Example = types
-  .model('Example', { prop: types.string })
-  .views(self => {
-    get upperProp(): string {
-      return self.prop.toUpperCase();
-    },
-  }))
-  .views(self => ({
-    get twiceUpperProp(): string {
-      return self.upperProp + self.upperProp;
-    },
-  }));
-```
+_**NOTE: the last approach will incur runtime performance penalty as accessing such computed values (e.g. inside `render()` method of an observed component) always leads to full recompute (see [this issue](https://github.com/mobxjs/mobx-state-tree/issues/818#issue-323164363) for details). For a heavily used computed properties it's recommended to use one of above approaches.**_
 
 Similarly, when writing actions or views one can use helper functions:
 
@@ -1411,14 +1513,32 @@ s.replaceTasks([{ done: true }])
 s.replaceTasks(types.array(Task).create([{ done: true }]))
 ```
 
-Additionally, the `cast` function can be also used in the inverse case, this is when you want to use an instance inside an snapshot.
-In this case MST will internally convert the instance to an snapshot before using it, but we need once more to fool TypeScript into
+Additionally, the `castToSnapshot` function can be also used in the inverse case, this is when you want to use an instance inside an snapshot.
+In this case MST will internally convert the instance to a snapshot before using it, but we need once more to fool TypeScript into
 thinking that this instance is actually a snapshot.
 
 ```typescript
 const task = Task.create({ done: true })
+const Store = types.model({
+    tasks: types.array(Task)
+})
+
 // we cast the task instance to a snapshot so it can be used as part of another snapshot without typing errors
-const s = Store.create({ tasks: [cast(task)] })
+const s = Store.create({ tasks: [castToSnapshot(task)] })
+```
+
+Finally, the `castToReferenceSnapshot` can be used when we want to use an instance to actually use a reference snapshot (a string or number).
+In this case MST will internally convert the instance to a reference snapshot before using it, but we need once more to fool TypeScript into
+thinking that this instance is actually a snapshot of a reference.
+
+```typescript
+const task = Task.create({ id: types.identifier, done: true })
+const Store = types.model({
+    tasks: types.array(types.reference(Task))
+})
+
+// we cast the task instance to a reference snapshot so it can be used as part of another snapshot without typing errors
+const s = Store.create({ tasks: [castToReferenceSnapshot(task)] })
 ```
 
 #### Known Typescript Issue 5938
@@ -1470,20 +1590,36 @@ export type ITodo = typeof Todo.Type
 
 It ain't pretty, but it works.
 
-#### Optional/empty maps
+#### Optional/empty maps/arrays
 
-Optional parameters, including "empty" maps, should be either a valid snapshot or a MST instance. To fix type errors such as `Error while converting {} to map`, define your type as such:
+Since v3, maps and arrays are optional by default, this is:
 
-```typescript
-map: types.optional(types.map(OtherType), {})
+```javascript
+types.map(OtherType)
+// is the same as
+types.optional(types.map(OtherType), {})
+
+types.array(OtherType)
+// is the same as
+types.optional(types.array(OtherType), [])
 ```
+
+#### `.shift()/.pop()`'ing last item of `types.array(PRIMITIVE_TYPE)` does not return correct value
+
+```javascript
+const array = types.array(types.number).create([1, 2])
+array.shift() // will return 1
+array.shift() // will return ScalarNode
+```
+
+This is a mobx bug, which was fixed in version 4.8.0/5.8.0. Please upgrade you peer dependency to corresponding version to get expected value.
 
 ### How does MST compare to Redux
 
 So far this might look a lot like an immutable state tree as found for example in Redux apps, but there're are only so many reasons to use Redux as per [article linked at the very top of Redux guide](https://medium.com/@dan_abramov/you-might-not-need-redux-be46360cf367) that MST covers too, meanwhile:
 
 -   Like Redux, and unlike MobX, MST prescribes a very specific state architecture.
--   mobx-state-tree allows direct modification of any value in the tree.  It is not necessary to construct a new tree in your actions.
+-   mobx-state-tree allows direct modification of any value in the tree. It is not necessary to construct a new tree in your actions.
 -   mobx-state-tree allows for fine-grained and efficient observation of any point in the state tree.
 -   mobx-state-tree generates JSON patches for any modification that is made.
 -   mobx-state-tree provides utilities to turn any MST tree into a valid Redux store.

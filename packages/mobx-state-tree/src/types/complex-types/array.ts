@@ -21,12 +21,10 @@ import {
     getStateTreeNode,
     IAnyType,
     IChildNodesMap,
-    IComplexType,
     IContext,
     IJsonPatch,
     INode,
     isArray,
-    isMutable,
     isNode,
     isPlainObject,
     isStateTreeNode,
@@ -39,19 +37,51 @@ import {
     typecheckInternal,
     typeCheckFailure,
     TypeFlags,
-    OptionalProperty
+    OptionalProperty,
+    ExtractS,
+    ExtractC,
+    ExtractT,
+    ExtractCST,
+    normalizeIdentifier,
+    EMPTY_OBJECT
 } from "../../internal"
 
-export interface IMSTArray<C, S, T> extends IObservableArray<T> {}
-export interface IArrayType<C, S, T>
-    extends IComplexType<C[] | undefined, S[], IMSTArray<C, S, T>>,
+/** @hidden */
+export interface IMSTArray<IT extends IAnyType>
+    extends IObservableArray<ExtractT<IT>>,
+        IStateTreeNode<ExtractC<IT>[] | undefined, ExtractS<IT>[]> {
+    // needs to be split or else it will complain about not being compatible with the array interface
+    push(...items: ExtractT<IT>[]): number
+    push(...items: ExtractCST<IT>[]): number
+
+    concat(...items: ConcatArray<ExtractT<IT>>[]): ExtractT<IT>[]
+    concat(...items: ConcatArray<ExtractCST<IT>>[]): ExtractT<IT>[]
+
+    concat(...items: (ExtractT<IT> | ConcatArray<ExtractT<IT>>)[]): ExtractT<IT>[]
+    concat(...items: (ExtractCST<IT> | ConcatArray<ExtractCST<IT>>)[]): ExtractT<IT>[]
+
+    splice(start: number, deleteCount?: number): ExtractT<IT>[]
+    splice(start: number, deleteCount: number, ...items: ExtractT<IT>[]): ExtractT<IT>[]
+    splice(start: number, deleteCount: number, ...items: ExtractCST<IT>[]): ExtractT<IT>[]
+
+    unshift(...items: ExtractT<IT>[]): number
+    unshift(...items: ExtractCST<IT>[]): number
+}
+
+/** @hidden */
+export interface IArrayType<IT extends IAnyType>
+    extends IType<ExtractC<IT>[] | undefined, ExtractS<IT>[], IMSTArray<IT>>,
         OptionalProperty {}
 
 /**
  * @internal
- * @private
+ * @hidden
  */
-export class ArrayType<C, S, T> extends ComplexType<C[] | undefined, S[], IMSTArray<C, S, T>> {
+export class ArrayType<IT extends IAnyType, C = ExtractC<IT>, S = ExtractS<IT>> extends ComplexType<
+    C[] | undefined,
+    S[],
+    IMSTArray<IT>
+> {
     shouldAttachNode = true
     subType: IAnyType
     readonly flags = TypeFlags.Array
@@ -67,7 +97,7 @@ export class ArrayType<C, S, T> extends ComplexType<C[] | undefined, S[], IMSTAr
 
     initializeChildNodes(objNode: ObjectNode, snapshot: S[] = []): IChildNodesMap {
         const subType = (objNode.type as ArrayType<any, any, any>).subType
-        const environment = objNode._environment
+        const environment = objNode.environment
         const result = {} as IChildNodesMap
         snapshot.forEach((item, index) => {
             const subpath = `${index}`
@@ -83,6 +113,7 @@ export class ArrayType<C, S, T> extends ComplexType<C[] | undefined, S[], IMSTAr
     ): IObservableArray<any> {
         return observable.array(convertChildNodesToArray(childNodes), mobxShallow)
     }
+
     finalizeNewInstance(node: ObjectNode, instance: IObservableArray<any>): void {
         _getAdministration(instance).dehancer = node.unbox
         intercept(instance, this.willChange as any)
@@ -100,13 +131,13 @@ export class ArrayType<C, S, T> extends ComplexType<C[] | undefined, S[], IMSTAr
     getChildNode(node: ObjectNode, key: string): INode {
         const index = parseInt(key, 10)
         if (index < node.storedValue.length) return node.storedValue[index]
-        return fail("Not a child: " + key)
+        throw fail("Not a child: " + key)
     }
 
     willChange(change: IArrayWillChange<any> | IArrayWillSplice<any>): Object | null {
-        const node = getStateTreeNode(change.object as IStateTreeNode<C, S>)
-        node.assertWritable()
-        const subType = (node.type as ArrayType<any, any, any>).subType
+        const node = getStateTreeNode(change.object as IMSTArray<IT>)
+        node.assertWritable({ subpath: String(change.index) })
+        const subType = (node.type as ArrayType<IT>).subType
         const childNodes = node.getChildren()
         let nodes = null
 
@@ -165,7 +196,7 @@ export class ArrayType<C, S, T> extends ComplexType<C[] | undefined, S[], IMSTAr
     }
 
     didChange(this: {}, change: IArrayChange<any> | IArraySplice<any>): void {
-        const node = getStateTreeNode(change.object as IStateTreeNode<C, S>)
+        const node = getStateTreeNode(change.object as IMSTArray<IT>)
         switch (change.type) {
             case "update":
                 return void node.emitPatch(
@@ -250,11 +281,12 @@ export class ArrayType<C, S, T> extends ComplexType<C[] | undefined, S[], IMSTAr
 }
 
 /**
- * Creates an index based collection type who's children are all of a uniform declared type.
+ * `types.array` - Creates an index based collection type who's children are all of a uniform declared type.
  *
  * This type will always produce [observable arrays](https://mobx.js.org/refguide/array.html)
  *
- * @example
+ * Example:
+ * ```ts
  * const Todo = types.model({
  *   task: types.string
  * })
@@ -267,18 +299,19 @@ export class ArrayType<C, S, T> extends ComplexType<C[] | undefined, S[], IMSTAr
  * unprotect(s) // needed to allow modifying outside of an action
  * s.todos.push({ task: "Grab coffee" })
  * console.log(s.todos[0]) // prints: "Grab coffee"
+ * ```
  *
- * @export
- * @alias types.array
- * @param {IType<S, T>} subtype
- * @returns {IComplexType<S[], IObservableArray<T>>}
+ * @param subtype
+ * @returns
  */
-export function array<C, S, T>(subtype: IType<C, S, T>): IArrayType<C, S, T> {
+export function array<IT extends IAnyType>(subtype: IT): IArrayType<IT> {
     if (process.env.NODE_ENV !== "production") {
         if (!isType(subtype))
-            fail("expected a mobx-state-tree type as first argument, got " + subtype + " instead")
+            throw fail(
+                "expected a mobx-state-tree type as first argument, got " + subtype + " instead"
+            )
     }
-    const ret = new ArrayType<C, S, T>(subtype.name + "[]", subtype)
+    const ret = new ArrayType<IT>(subtype.name + "[]", subtype)
     return ret as typeof ret & OptionalProperty
 }
 
@@ -318,7 +351,7 @@ function reconcileArrayChildren<T>(
             // check if already belongs to the same parent. if so, avoid pushing item in. only swapping can occur.
             if (isStateTreeNode(newValue) && getStateTreeNode(newValue).parent === parent) {
                 // this node is owned by this parent, but not in the reconcilable set, so it must be double
-                fail(
+                throw fail(
                     `Cannot add an object to a state tree if it is already part of the same or another state tree. Tried to assign an object to '${
                         parent.path
                     }/${newPaths[i]}', but it lives already at '${getStateTreeNode(newValue).path}'`
@@ -353,7 +386,9 @@ function reconcileArrayChildren<T>(
     return nothingChanged ? null : oldNodes
 }
 
-// convert a value to a node at given parent and subpath. attempts to reuse old node if possible and given
+/**
+ * Convert a value to a node at given parent and subpath. Attempts to reuse old node if possible and given.
+ */
 function valueAsNode(
     childType: IAnyType,
     parent: ObjectNode,
@@ -367,7 +402,7 @@ function valueAsNode(
     // the new value has a MST node
     if (isStateTreeNode(newValue)) {
         const childNode = getStateTreeNode(newValue)
-        childNode.assertAlive()
+        childNode.assertAlive(EMPTY_OBJECT)
 
         // the node lives here
         if (childNode.parent !== null && childNode.parent === parent) {
@@ -383,10 +418,12 @@ function valueAsNode(
         return childNode
     }
     // nothing to do, create from scratch
-    return childType.instantiate(parent, subpath, parent._environment, newValue)
+    return childType.instantiate(parent, subpath, parent.environment, newValue)
 }
 
-// given a value
+/**
+ * Check if a node holds a value.
+ */
 function areSame(oldNode: INode, newValue: any) {
     // the new value has the same node
     if (isStateTreeNode(newValue)) {
@@ -400,7 +437,8 @@ function areSame(oldNode: INode, newValue: any) {
         oldNode.identifier !== null &&
         oldNode.identifierAttribute &&
         isPlainObject(newValue) &&
-        oldNode.identifier === "" + newValue[oldNode.identifierAttribute]
+        oldNode.identifier === normalizeIdentifier(newValue[oldNode.identifierAttribute]) &&
+        oldNode.type.is(newValue)
     )
         return true
     return false
@@ -409,11 +447,11 @@ function areSame(oldNode: INode, newValue: any) {
 /**
  * Returns if a given value represents an array type.
  *
- * @export
- * @template IT
- * @param {IT} type
- * @returns {type is IT}
+ * @param type
+ * @returns `true` if the type is an array type.
  */
-export function isArrayType<IT extends IArrayType<any, any, any>>(type: IT): type is IT {
+export function isArrayType<Items extends IAnyType = IAnyType>(
+    type: IAnyType
+): type is IArrayType<Items> {
     return isType(type) && (type.flags & TypeFlags.Array) > 0
 }

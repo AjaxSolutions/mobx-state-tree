@@ -5,7 +5,8 @@ import {
     unprotect,
     applySnapshot,
     applyPatch,
-    cast
+    cast,
+    SnapshotOut
 } from "../../src"
 
 class Decimal {
@@ -74,7 +75,7 @@ class Decimal {
         unprotect(w1)
 
         const p = recordPatches(w1)
-        const snapshots: any[] = []
+        const snapshots: SnapshotOut<typeof Wallet>[] = []
         onSnapshot(w1, s => {
             snapshots.push(s)
         })
@@ -82,7 +83,7 @@ class Decimal {
         const b1 = w1.balance
         expect(b1).toBeInstanceOf(Decimal)
 
-        w1.balance = cast("2.5")
+        w1.balance = "2.5" as any // TODO: make cast work with custom types
         expect(b1).toBeInstanceOf(Decimal)
         expect(w1.balance).toBe(b1) // reconciled
 
@@ -92,7 +93,7 @@ class Decimal {
         w1.balance = new Decimal("3.5")
         expect(b1).toBeInstanceOf(Decimal)
 
-        w1.balance = cast("4.5")
+        w1.balance = "4.5" as any
         expect(b1).toBeInstanceOf(Decimal)
 
         w1.lastTransaction = b1
@@ -154,7 +155,7 @@ class Decimal {
         unprotect(w1)
 
         const p = recordPatches(w1)
-        const snapshots: any[] = []
+        const snapshots: SnapshotOut<typeof Wallet>[] = []
         onSnapshot(w1, s => {
             snapshots.push(s)
         })
@@ -162,7 +163,7 @@ class Decimal {
         const b1 = w1.balance
         expect(b1).toBeInstanceOf(Decimal)
 
-        w1.balance = cast([2, 5])
+        w1.balance = [2, 5] as any
         expect(b1).toBeInstanceOf(Decimal)
         expect(w1.balance).not.toBe(b1) // not reconciled, balance is not deep equaled (TODO: future feature?)
 
@@ -172,7 +173,7 @@ class Decimal {
         w1.balance = new Decimal("3.5")
         expect(b1).toBeInstanceOf(Decimal)
 
-        w1.balance = cast([4, 5])
+        w1.balance = [4, 5] as any
         expect(b1).toBeInstanceOf(Decimal)
 
         // patches & snapshots
@@ -189,7 +190,7 @@ class Decimal {
 
         applyPatch(w1, {
             op: "replace",
-            path: "balance",
+            path: "/balance",
             value: [5, 0]
         })
         expect(w1.balance.toString()).toBe("5.0")

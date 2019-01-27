@@ -10,10 +10,10 @@ import {
     getSnapshot,
     types,
     IJsonPatch,
-    setLivelynessChecking,
-    cast
+    setLivelinessChecking
 } from "../../src"
 import { observable, autorun } from "mobx"
+import { ExtractC } from "../../src/core/type/type"
 
 const createTestFactories = () => {
     const ItemFactory = types.optional(
@@ -32,7 +32,7 @@ test("it should create a factory", () => {
 })
 test("it should succeed if not optional and no default provided", () => {
     const Factory = types.array(types.string)
-    expect(Factory.create().toJSON!()).toEqual([])
+    expect(getSnapshot(Factory.create())).toEqual([])
 })
 test("it should restore the state from the snapshot", () => {
     const { Factory } = createTestFactories()
@@ -68,7 +68,7 @@ test("it should emit add patches", () => {
     const { Factory, ItemFactory } = createTestFactories()
     const doc = Factory.create()
     unprotect(doc)
-    let patches: any[] = []
+    let patches: IJsonPatch[] = []
     onPatch(doc, patch => patches.push(patch))
     doc.push(ItemFactory.create({ to: "universe" }))
     expect(patches).toEqual([{ op: "add", path: "/0", value: { to: "universe" } }])
@@ -147,13 +147,13 @@ test("paths shoud remain correct when splicing", () => {
         })
     unprotect(store)
     expect(store.todos.map(getPath)).toEqual(["/todos/0"])
-    store.todos.push(cast({}))
+    store.todos.push({})
     expect(store.todos.map(getPath)).toEqual(["/todos/0", "/todos/1"])
-    store.todos.unshift(cast({}))
+    store.todos.unshift({})
     expect(store.todos.map(getPath)).toEqual(["/todos/0", "/todos/1", "/todos/2"])
     store.todos.splice(0, 2)
     expect(store.todos.map(getPath)).toEqual(["/todos/0"])
-    store.todos.splice(0, 1, cast({}), cast({}), cast({}))
+    store.todos.splice(0, 1, {}, {}, {})
     expect(store.todos.map(getPath)).toEqual(["/todos/0", "/todos/1", "/todos/2"])
     store.todos.remove(store.todos[1])
     expect(store.todos.map(getPath)).toEqual(["/todos/0", "/todos/1"])
@@ -186,9 +186,9 @@ test("items should be reconciled correctly when splicing - 1", () => {
     expect(isAlive(b)).toBe(true)
     expect(isAlive(c)).toBe(false)
 
-    setLivelynessChecking("error")
+    setLivelinessChecking("error")
     expect(() => store.todos.splice(0, 1, a, c, d)).toThrowError(
-        "[mobx-state-tree][error] You are trying to read or write to an object that is no longer part of a state tree. (Object type was 'Task'). Either detach nodes first, or don't use objects after removing / replacing them in the tree."
+        "You are trying to read or write to an object that is no longer part of a state tree. (Object type: 'Task', Path upon death: '/todos/1', Subpath: '', Action: ''). Either detach nodes first, or don't use objects after removing / replacing them in the tree."
     )
     store.todos.splice(0, 1, clone(a), clone(c), clone(d))
     expect(store.todos.map(_ => _.x)).toEqual(["a", "c", "d"])
@@ -324,13 +324,13 @@ test("it should not be allowed to add the same item twice to the same store", ()
     expect(() => {
         s.todos.push(a)
     }).toThrowError(
-        "[mobx-state-tree] Cannot add an object to a state tree if it is already part of the same or another state tree. Tried to assign an object to '/todos/1', but it lives already at '/todos/0'"
+        "Cannot add an object to a state tree if it is already part of the same or another state tree. Tried to assign an object to '/todos/1', but it lives already at '/todos/0'"
     )
     const b = Task.create()
     expect(() => {
         s.todos.push(b, b)
     }).toThrowError(
-        "[mobx-state-tree] Cannot add an object to a state tree if it is already part of the same or another state tree. Tried to assign an object to '/todos/2', but it lives already at '/todos/1'"
+        "Cannot add an object to a state tree if it is already part of the same or another state tree. Tried to assign an object to '/todos/2', but it lives already at '/todos/1'"
     )
 })
 test("it should support observable arrays", () => {
@@ -393,7 +393,7 @@ test("it should keep unchanged for structrual equalled snapshot", () => {
         numbers: [1, 2, 3]
     })
 
-    const values: any = []
+    const values: boolean[][] = []
     autorun(() => {
         values.push(store.todos.map(todo => todo.done))
     })
@@ -409,11 +409,53 @@ test("it should keep unchanged for structrual equalled snapshot", () => {
     ])
     expect(values).toEqual([[false, false, false], [false, false, true]])
 
-    const values1: any = []
+    const values1: number[][] = []
     autorun(() => {
         values1.push(store.numbers.slice())
     })
     applySnapshot(store.numbers, [1, 2, 4])
     applySnapshot(store.numbers, [1, 2, 4])
     expect(values1).toEqual([[1, 2, 3], [1, 2, 4]])
+})
+
+// === OPERATIONS TESTS ===
+test("#1105 - it should return pop/shift'ed values for scalar arrays", () => {
+    const ScalarArray = types
+        .model({
+            array: types.array(types.number)
+        })
+        .actions(self => {
+            return {
+                shift() {
+                    return self.array.shift()
+                }
+            }
+        })
+
+    const test = ScalarArray.create({ array: [3, 5] })
+
+    expect(test.shift()).toEqual(3)
+    expect(test.shift()).toEqual(5)
+})
+
+test("it should return pop/shift'ed values for object arrays", () => {
+    const TestObject = types.model({ id: types.string })
+    const ObjectArray = types
+        .model({
+            array: types.array(TestObject)
+        })
+        .actions(self => {
+            return {
+                shift() {
+                    return self.array.shift()
+                }
+            }
+        })
+
+    const test = ObjectArray.create({
+        array: [{ id: "foo" }, { id: "bar" }]
+    })
+
+    expect(test.shift()).toEqual({ id: "foo" })
+    expect(test.shift()).toEqual({ id: "bar" })
 })

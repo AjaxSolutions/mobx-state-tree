@@ -1,6 +1,79 @@
-# 3.2.5
+-   Make liveliness errors give more info to trace their cause [#1142](https://github.com/mobxjs/mobx-state-tree/issues/1142) through [#1147](https://github.com/mobxjs/mobx-state-tree/pull/1147) by [@xaviergonz](https://github.com/xaviergonz)
 
+# 3.10.2
+
+-   Fixed a regression regarding json paths not being correctly rooted to the base [#1128](https://github.com/mobxjs/mobx-state-tree/issues/1128) through [#1146](https://github.com/mobxjs/mobx-state-tree/pull/1146) by [@xaviergonz](https://github.com/xaviergonz)
+
+# 3.10.1
+
+-   Fixed mobx 5.9.0 compatibility [#1143](https://github.com/mobxjs/mobx-state-tree/issues/1143) through [#1144](https://github.com/mobxjs/mobx-state-tree/pull/1144) by [@xaviergonz](https://github.com/xaviergonz)
+-   Made liveliness checking in warn mode log an error so the stack trace can be seen [#1142](https://github.com/mobxjs/mobx-state-tree/issues/1142) through [#1145](https://github.com/mobxjs/mobx-state-tree/pull/1145) by [@xaviergonz](https://github.com/xaviergonz)
+-   Fixed JSON path escaping, where '/' and '~' were incorrectly being encoded/decoded as '~0' and '~1' rather than '~1' and '~0'. Also fixed empty keys not being handled correctly by JSON patches [#1128](https://github.com/mobxjs/mobx-state-tree/issues/1128). Fixed through [#1129](https://github.com/mobxjs/mobx-state-tree/pull/1129) by [@xaviergonz](https://github.com/xaviergonz)
+
+# 3.10.0
+
+-   Fix for safeReference doesn't work when multiple nodes reference a single reference that gets deleted [#1115](https://github.com/mobxjs/mobx-state-tree/issues/1115) through [#1121](https://github.com/mobxjs/mobx-state-tree/pull/1121) by [@xaviergonz](https://github.com/xaviergonz)
+-   Little fix for `castFlowReturn` not typecasting the promise to its actual result.
+-   Made `isAlive(node)` reactive, so it can be reacted upon through [#1100](https://github.com/mobxjs/mobx-state-tree/pull/1100) by [@xaviergonz](https://github.com/xaviergonz)
+-   Fix for unaccessed nodes not unregistering their identifiers [#1112](https://github.com/mobxjs/mobx-state-tree/issues/1112) through [#1113](https://github.com/mobxjs/mobx-state-tree/pull/1113) by [@xaviergonz](https://github.com/xaviergonz)
+-   Added `clear()` to `UndoManager` middleware through [#1118](https://github.com/mobxjs/mobx-state-tree/pull/1118) by [@chemitaxis](https://github.com/chemitaxis)
+
+# 3.9.0
+
+-   TypeScript 3.0 or later is now required when using TypeScript. This brings some improvements:
+    -   `flow` arguments and return types are now correctly inferred automatically. One exception is when the last return of a `flow` is a `Promise`. In these cases `castFlowReturn(somePromise)` needs to be used so the return type can be inferred properly.
+    -   `create` method is now smart enough to warn when no snapshot argument is provided on types that have some mandatory properties.
+-   Added `setLivelinessChecking` and `getLivelinessChecking`, the old `setLivelynessChecking` will eventually be deprecated.
+-   Added `onInvalidated` option for references and `types.safeReference` (see readme) through [#1091](https://github.com/mobxjs/mobx-state-tree/pull/1091) by [@xaviergonz](https://github.com/xaviergonz)
+-   Added `tryReference` and `isValidReference` to use references that might be no longer pointing to any nodes in a safe way through [#1087](https://github.com/mobxjs/mobx-state-tree/pull/1087) by [@xaviergonz](https://github.com/xaviergonz)
+-   Readded `IComplexType` for backwards compatibility.
+
+# 3.8.1
+
+-   Fixed non-initialized nodes not being destroyed [#1080](https://github.com/mobxjs/mobx-state-tree/issues/1080) through [#1082](https://github.com/mobxjs/mobx-state-tree/pull/1082) by [@k-g-a](https://github.com/k-g-a)
+-   Fixed a memory leak in createActionTrackingMiddleware when using flow [#1083](https://github.com/mobxjs/mobx-state-tree/issues/1083) through [#1084](https://github.com/mobxjs/mobx-state-tree/pull/1084) by [@robinfehr](https://github.com/robinfehr)
+
+# 3.8.0
+
+-   Added castToSnapshot/castToReferenceSnapshot methods for TypeScript and fixed some TypeScript typings not being properly detected when using SnapshotIn types through [#1074](https://github.com/mobxjs/mobx-state-tree/pull/1074) by [@xaviergonz](https://github.com/xaviergonz)
+-   Fixed redux middleware throwing an error when a flow is called before it is connected [#1065](https://github.com/mobxjs/mobx-state-tree/issues/1065) through [#1079](https://github.com/mobxjs/mobx-state-tree/pull/1079) by [@mkramb](https://github.com/mkramb) and [@xaviergonz](https://github.com/xaviergonz)
+-   Made `addDisposer` return the passed disposer through [#1059](https://github.com/mobxjs/mobx-state-tree/pull/1059) by [@xaviergonz](https://github.com/xaviergonz)
+
+# 3.7.1
+
+-   Fixed references to nodes being broken after the node was replaced [#1052](https://github.com/mobxjs/mobx-state-tree/issues/1052), plus speed up of reference resolving when using IDs through [#1053](https://github.com/mobxjs/mobx-state-tree/pull/1053) by [@xaviergonz](https://github.com/xaviergonz)
+
+# 3.7.0
+
+-   Middleware events now also contain `allParentIds` (chain of causing ids, from root until (excluding) current)
+-   Improved redux dev tools integration, now supporting flows and showing action chains through [#1035](https://github.com/mobxjs/mobx-state-tree/pull/1035) based on a fix by [@bourquep](https://github.com/bourquep)
+
+# 3.6.0
+
+-   Made type Typescript compilation when 'declarations' is set to true + type completion faster thanks to some type optimizations through [#1043](https://github.com/mobxjs/mobx-state-tree/pull/1043) by [@xaviergonz](https://github.com/xaviergonz)
+-   Fix for array reconciliation of union types with ids [#1045](https://github.com/mobxjs/mobx-state-tree/issues/1045) through [#1047](https://github.com/mobxjs/mobx-state-tree/pull/1047) by [@xaviergonz](https://github.com/xaviergonz)
+-   Fixed bug where the eager option for the union type defaulted to true when no options argument was passed but false when it was passed. Now they both default to true when not specified. Fixed through [#1046](https://github.com/mobxjs/mobx-state-tree/pull/1046) by [@xaviergonz](https://github.com/xaviergonz)
+
+# 3.5.0
+
+-   Fix for afterCreate/afterAttach sometimes throwing an exception when a node was created as part of a view/computed property [#967](https://github.com/mobxjs/mobx-state-tree/issues/967) through [#1026](https://github.com/mobxjs/mobx-state-tree/pull/1026) by [@xaviergonz](https://github.com/xaviergonz). Note that this fix will only work if your installed peer mobx version is >= 4.5.0 or >= 5.5.0
+-   Fix for cast method being broken in Typescript 3.1.1 through [#1028](https://github.com/mobxjs/mobx-state-tree/pull/1028) by [@xaviergonz](https://github.com/xaviergonz)
+
+# 3.4.0
+
+-   Added getPropertyMembers(typeOrNode) through [#1016](https://github.com/mobxjs/mobx-state-tree/pull/1016) by [@xaviergonz](https://github.com/xaviergonz)
+-   Fix for preProcessSnapshot not copied on compose [#613](https://github.com/mobxjs/mobx-state-tree/issues/613) through [#1013](https://github.com/mobxjs/mobx-state-tree/pull/1013) by [@theRealScoobaSteve](https://github.com/theRealScoobaSteve)
+-   Fix for actions sometimes failing to resolve this to self through [#1014](https://github.com/mobxjs/mobx-state-tree/pull/1014) by [@xaviergonz](https://github.com/xaviergonz)
+-   Fix for preProcessSnapshot not copied on compose [#613](https://github.com/mobxjs/mobx-state-tree/issues/613) through [#1013](https://github.com/mobxjs/mobx-state-tree/pull/1013) by [@theRealScoobaSteve](https://github.com/theRealScoobaSteve)
+-   Improvements to the bookshop example through [#1009](https://github.com/mobxjs/mobx-state-tree/pull/1009) by [@programmer4web](https://github.com/programmer4web)
+-   Fix for a regression with optional identifiers [#1019](https://github.com/mobxjs/mobx-state-tree/issues/1019) through [#1020](https://github.com/mobxjs/mobx-state-tree/pull/1020) by [@xaviergonz](https://github.com/xaviergonz)
+
+# 3.3.0
+
+-   Fix for references sometimes not intializing its parents [#993](https://github.com/mobxjs/mobx-state-tree/issues/993) through [#997](https://github.com/mobxjs/mobx-state-tree/pull/997) by [@xaviergonz](https://github.com/xaviergonz)
 -   Fix for TS3 issues with reference type [#994](https://github.com/mobxjs/mobx-state-tree/issues/994) through [#995](https://github.com/mobxjs/mobx-state-tree/pull/995) by [@xaviergonz](https://github.com/xaviergonz)
+-   types.optional will now throw if an instance is directly passed as default value [#1002](https://github.com/mobxjs/mobx-state-tree/issues/1002) through [#1003](https://github.com/mobxjs/mobx-state-tree/pull/1003) by [@xaviergonz](https://github.com/xaviergonz)
+-   Doc fixes and improvements by [@AjaxSolutions](https://github.com/AjaxSolutions) and [@agilgur5](https://github.com/agilgur5)
 
 # 3.2.4
 
@@ -76,9 +149,9 @@ Also, the 'object has died' exception can be suppressed now. One should still ad
 -   **[BREAKING]** `types.maybe` now serializes to / from `undefined` by default, as it is more and more the common best practice to don't use `null` at all and MST follows this practice. Use `types.maybeNull` for the old behavior (see [#830](https://github.com/mobxjs/mobx-state-tree/issues/830))
 -   **[BREAKING]** `types.frozen` is now a function, and can now be invoked in a few different ways:
     1.  `types.frozen()` - behaves the same as `types.frozen` in MST 2.
-    1.  `types.frozen(SubType)` - provide a valid MST type and frozen will check if the provided data conforms the snapshot for that type. Note that the type will not actually be instantiated, so it can only be used to check the _shape_ of the data. Adding views or actions to `SubType` would be pointless.
-    1.  `types.frozen(someDefaultValue)` - provide a primitive value, object or array, and MST will infer the type from that object, and also make it the default value for the field
-    1.  `types.frozen<TypeScriptType>()` - provide a typescript type, to help in strongly typing the field (design time only)
+    2.  `types.frozen(SubType)` - provide a valid MST type and frozen will check if the provided data conforms the snapshot for that type. Note that the type will not actually be instantiated, so it can only be used to check the _shape_ of the data. Adding views or actions to `SubType` would be pointless.
+    3.  `types.frozen(someDefaultValue)` - provide a primitive value, object or array, and MST will infer the type from that object, and also make it the default value for the field
+    4.  `types.frozen<TypeScriptType>()` - provide a typescript type, to help in strongly typing the field (design time only)
 -   It is no longer necessary to wrap `types.map` or `types.array` in `types.optional` when used in a `model` type, `map` and `array` are now optional by default when used as property type. See [#906](https://github.com/mobxjs/mobx-state-tree/issues/906)
 -   **[BREAKING]** `postProcessSnapshot` can no longer be declared as action, but, like `preProcessSnapshot`, needs to be defined on the type rather than on the instance.
 -   **[BREAKING]** `types.union` is now eager, which means that if multiple valid types for a value are encountered, the first valid type is picked, rather then throwing. #907 / #804, `dispatcher` param => option,
@@ -156,11 +229,11 @@ Also, the 'object has died' exception can be suppressed now. One should still ad
 
 **Features**
 
--   It is now possible to create [custom primitive(like) types](https://github.com/mobxjs/mobx-state-tree/blob/master/API.md#typescustom)! Implements [#673](https://github.com/mobxjs/mobx-state-tree/issues/673) through [#689](https://github.com/mobxjs/mobx-state-tree/pull/689)
--   [`getIdentifier`](https://github.com/mobxjs/mobx-state-tree/blob/master/API.md#getidentifier) is now exposed as function, to get the identifier of a model instance (if any). Fixes [#674](https://github.com/mobxjs/mobx-state-tree/issues/674) through [#678](https://github.com/mobxjs/mobx-state-tree/pull/678) by TimHollies
+-   It is now possible to create [custom primitive(like) types](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/API/README.md#typescustom)! Implements [#673](https://github.com/mobxjs/mobx-state-tree/issues/673) through [#689](https://github.com/mobxjs/mobx-state-tree/pull/689)
+-   [`getIdentifier`](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/API/README.md#getidentifier) is now exposed as function, to get the identifier of a model instance (if any). Fixes [#674](https://github.com/mobxjs/mobx-state-tree/issues/674) through [#678](https://github.com/mobxjs/mobx-state-tree/pull/678) by TimHollies
 -   Writing [middleware](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/middleware.md) has slightly changed, to make it less error prone and more explicit whether a middleware chain should be aborted. For details, see [#675](https://github.com/mobxjs/mobx-state-tree/pull/675) by Robin Fehr
--   It is now possible to configure whether [attached middleware](https://github.com/mobxjs/mobx-state-tree/blob/master/API.md#addmiddleware) should be triggered for the built-in hooks / operations. [#653](https://github.com/mobxjs/mobx-state-tree/pull/653) by Robin Fehr
--   We exposed an [api](https://github.com/mobxjs/mobx-state-tree/blob/master/API.md#getmembers) to perform reflection on model instances. [#649](https://github.com/mobxjs/mobx-state-tree/pull/649) by Robin Fehr
+-   It is now possible to configure whether [attached middleware](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/API/README.md#addmiddleware) should be triggered for the built-in hooks / operations. [#653](https://github.com/mobxjs/mobx-state-tree/pull/653) by Robin Fehr
+-   We exposed an [api](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/API/README.md#getmembers) to perform reflection on model instances. [#649](https://github.com/mobxjs/mobx-state-tree/pull/649) by Robin Fehr
 
 **Fixes**
 

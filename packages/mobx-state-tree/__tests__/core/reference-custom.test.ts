@@ -9,7 +9,8 @@ import {
     getRoot,
     onSnapshot,
     flow,
-    cast
+    Instance,
+    resolveIdentifier
 } from "../../src"
 
 test("it should support custom references - basics", () => {
@@ -20,11 +21,14 @@ test("it should support custom references - basics", () => {
     const UserByNameReference = types.maybeNull(
         types.reference(User, {
             // given an identifier, find the user
-            get(identifier /* string */, parent: any /*Store*/) {
-                return parent.users.find((u: typeof User.Type) => u.name === identifier) || null
+            get(identifier, parent): any {
+                return (
+                    (parent as Instance<typeof Store>)!.users.find(u => u.name === identifier) ||
+                    null
+                )
             },
             // given a user, produce the identifier that should be stored
-            set(value /* User */) {
+            set(value) {
                 return value.name
             }
         })
@@ -59,10 +63,10 @@ test("it should support custom references - adv", () => {
         name: types.string
     })
     const NameReference = types.reference(User, {
-        get(identifier, parent) {
+        get(identifier, parent): any {
             if (identifier === null) return null
-            const users = values(getRoot<any>(parent!).users)
-            return users.filter((u: typeof User.Type) => u.name === identifier)[0] || null
+            const users = values(getRoot<Instance<typeof Store>>(parent!).users)
+            return users.filter(u => u.name === identifier)[0] || null
         },
         set(value) {
             return value ? value.name : ""
@@ -86,7 +90,7 @@ test("it should support custom references - adv", () => {
     const p = recordPatches(s)
     const r: any[] = []
     onSnapshot(s, r.push.bind(r))
-    const ids: any[] = []
+    const ids: (string | null)[] = []
     reaction(
         () => s.selection,
         selection => {
@@ -96,7 +100,7 @@ test("it should support custom references - adv", () => {
     s.selection = s.users.get("1")!
     expect(s.selection.name).toBe("Michel")
     expect(s.selection === s.users.get("1")).toBe(true)
-    expect(getSnapshot<any>(s).selection).toBe("Michel")
+    expect(getSnapshot(s).selection).toBe("Michel")
     applySnapshot(s, Object.assign({}, getSnapshot(s), { selection: "Mattia" }))
     expect(s.selection).toBe(s.users.get("2"))
     applyPatch(s, { op: "replace", path: "/selection", value: "Michel" })
@@ -112,17 +116,17 @@ test("it should support custom references - adv", () => {
 })
 
 test("it should support dynamic loading", done => {
-    const events: any[] = []
+    const events: string[] = []
     const User = types.model({
         name: types.string,
         age: 0
     })
     const UserByNameReference = types.maybe(
         types.reference(User, {
-            get(identifier /* string */, parent: any /*Store*/) {
-                return parent.getOrLoadUser(identifier)
+            get(identifier: string, parent): any {
+                return (parent as Instance<typeof Store>).getOrLoadUser(identifier)
             },
-            set(value /* User */) {
+            set(value) {
                 return value.name
             }
         })
@@ -135,7 +139,7 @@ test("it should support dynamic loading", done => {
         .actions(self => ({
             loadUser: flow(function* loadUser(name: string) {
                 events.push("loading " + name)
-                self.users.push(cast({ name }))
+                self.users.push({ name })
                 yield new Promise(resolve => {
                     setTimeout(resolve, 200)
                 })
@@ -173,4 +177,74 @@ test("it should support dynamic loading", done => {
             done()
         }
     )
+})
+
+test("custom reference / safe custom reference to another store works", () => {
+    const Todo = types.model({ id: types.identifier })
+    const TodoStore = types.model({ todos: types.array(Todo) })
+    const OtherStore = types.model({
+        todoRef: types.maybe(
+            types.reference(Todo, {
+                get(id) {
+                    const node = resolveIdentifier(Todo, todos, id)
+                    if (!node) {
+                        throw new Error("Invalid ref")
+                    }
+                    return node
+                },
+                set(value) {
+                    return value.id
+                }
+            })
+        ),
+        safeRef: types.safeReference(Todo, {
+            get(id) {
+                const node = resolveIdentifier(Todo, todos, id)
+                if (!node) {
+                    throw new Error("Invalid ref")
+                }
+                return node
+            },
+            set(value) {
+                return value.id
+            }
+        })
+    })
+    const todos = TodoStore.create({
+        todos: [{ id: "1" }, { id: "2" }, { id: "3" }]
+    })
+    unprotect(todos)
+
+    // from a snapshot
+    const otherStore = OtherStore.create({
+        todoRef: "1",
+        safeRef: "1"
+    })
+    unprotect(otherStore)
+    expect(otherStore.todoRef!.id).toBe("1")
+    expect(otherStore.safeRef!.id).toBe("1")
+
+    // assigning an id
+    otherStore.todoRef = "2" as any
+    otherStore.safeRef = "2" as any
+    expect(otherStore.todoRef!.id).toBe("2")
+    expect(otherStore.safeRef!.id).toBe("2")
+
+    // assigning a node directly
+    otherStore.todoRef = todos.todos[2]
+    otherStore.safeRef = todos.todos[2]
+    expect(otherStore.todoRef!.id).toBe("3")
+    expect(otherStore.safeRef!.id).toBe("3")
+
+    // getting the snapshot
+    expect(getSnapshot(otherStore)).toEqual({
+        todoRef: "3",
+        safeRef: "3"
+    })
+
+    // the removed node should throw on standard refs access
+    // and be set to undefined on safe ones
+    todos.todos.splice(2, 1)
+    expect(() => otherStore.todoRef).toThrow("Invalid ref")
+    expect(otherStore.safeRef).toBe(undefined)
 })

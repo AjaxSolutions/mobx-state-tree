@@ -13,14 +13,15 @@ const METHODS_AND_INTERNAL_TYPES = stringToArray(`
     splitJsonPath,
     decorate,
     addMiddleware,
-    process,
     isStateTreeNode,
     flow,
+    castFlowReturn,
     applyAction,
     onAction,
     recordActions,
     createActionTrackingMiddleware,
-    setLivelynessChecking,
+    setLivelinessChecking,
+    getLivelinessChecking,
     getType,
     getChildType,
     onPatch,
@@ -53,7 +54,10 @@ const METHODS_AND_INTERNAL_TYPES = stringToArray(`
     getEnv,
     walk,
     getMembers,
+    getPropertyMembers,
     cast,
+    castToSnapshot,
+    castToReferenceSnapshot,
     isType,
     isArrayType,
     isFrozenType,
@@ -67,8 +71,15 @@ const METHODS_AND_INTERNAL_TYPES = stringToArray(`
     isReferenceType,
     isRefinementType,
     isUnionType,
+    isValidReference,
+    tryReference,
 
     types
+`)
+
+const DEPRECATED_METHODS_AND_INTERNAL_TYPES = stringToArray(`
+    setLivelynessChecking,
+    process
 `)
 
 const METHODS = METHODS_AND_INTERNAL_TYPES.filter(s => s[0].toLowerCase() === s[0])
@@ -81,6 +92,7 @@ const TYPES = stringToArray(`
     compose,
     custom,
     reference,
+    safeReference,
     union,
     optional,
     literal,
@@ -107,6 +119,7 @@ test("correct api exposed", () => {
         Object.keys(mst)
             .sort()
             .filter(key => (mst as any)[key] !== undefined) // filter out interfaces
+            .filter(s => !DEPRECATED_METHODS_AND_INTERNAL_TYPES.includes(s))
     ).toEqual([...METHODS, ...INTERNAL_TYPES].sort())
 })
 test("correct types exposed", () => {
@@ -117,13 +130,17 @@ test("all methods mentioned in readme.md", () => {
     const missing = TYPES.map(type => "types." + type)
         .concat(METHODS)
         .filter(identifier => readme.indexOf("`" + identifier) === -1)
+        .filter(s => !DEPRECATED_METHODS_AND_INTERNAL_TYPES.includes(s))
     expect(missing).toEqual([])
 })
-test("all methods mentioned in api.md", () => {
-    const apimd = readFileSync(__dirname + "/../../../../API.md", "utf8")
-    const missing = TYPES.map(type => "types." + type)
-        .concat(METHODS)
-        .filter(identifier => apimd.indexOf("# " + identifier) === -1)
+test("all methods mentioned in API docs", () => {
+    const apimd = readFileSync(__dirname + "/../../../../docs/API/README.md", "utf8")
+    const missing = TYPES.map(type => "types." + type).filter(
+        identifier => apimd.indexOf(identifier) === -1
+    )
+    missing.push(
+        ...METHODS.filter(identifier => apimd.indexOf("#" + identifier.toLowerCase()) === -1)
+    )
     expect(missing).toEqual([])
 })
 

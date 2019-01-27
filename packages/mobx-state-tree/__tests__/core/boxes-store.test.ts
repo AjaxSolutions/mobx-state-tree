@@ -2,7 +2,15 @@
  *  Based on examples/boxes/domain-state.js
  */
 import { values } from "mobx"
-import { types, getParent, hasParent, recordPatches, unprotect, getSnapshot } from "../../src"
+import {
+    types,
+    getParent,
+    hasParent,
+    recordPatches,
+    unprotect,
+    getSnapshot,
+    Instance
+} from "../../src"
 
 export const Box = types
     .model("Box", {
@@ -56,7 +64,7 @@ export const Store = types
         function addArrow(id: string, from: string, to: string) {
             self.arrows.push(Arrow.create({ id, from, to }))
         }
-        function setSelection(selection: typeof Box.Type) {
+        function setSelection(selection: Instance<typeof Box>) {
             self.selection = selection
         }
         function createBox(
@@ -64,7 +72,7 @@ export const Store = types
             name: string,
             x: number,
             y: number,
-            source: typeof Box.Type | null | undefined,
+            source: Instance<typeof Box> | null | undefined,
             arrowId: string | null
         ) {
             const box = addBox(id, name, x, y)
@@ -96,7 +104,7 @@ test("store is deserialized correctly", () => {
     expect(s.selection === s.boxes.get("aa")).toBe(true)
     expect(s.arrows[0].from.name).toBe("Rotterdam")
     expect(s.arrows[0].to.name).toBe("Bratislava")
-    expect(values(s.boxes).map((b: any) => b.isSelected)).toEqual([false, true])
+    expect(values(s.boxes).map(b => b.isSelected)).toEqual([false, true])
 })
 test("store emits correct patch paths", () => {
     const s = createStore()

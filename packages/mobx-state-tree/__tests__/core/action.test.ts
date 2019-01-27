@@ -7,7 +7,10 @@ import {
     applySnapshot,
     addMiddleware,
     getRoot,
-    cast
+    cast,
+    IMiddlewareEvent,
+    ISerializedActionCall,
+    Instance
 } from "../../src"
 
 /// Simple action replay and invocation
@@ -52,13 +55,13 @@ test("applying patches should be recordable and replayable", () => {
     const t2 = Task.create()
     const recorder = recordActions(t1)
     expect(t1.done).toBe(false)
-    applyPatch(t1, { op: "replace", path: "done", value: true })
+    applyPatch(t1, { op: "replace", path: "/done", value: true })
     expect(t1.done).toBe(true)
     expect(recorder.actions).toEqual([
         {
             name: "@APPLY_PATCHES",
             path: "",
-            args: [[{ op: "replace", path: "done", value: true }]]
+            args: [[{ op: "replace", path: "/done", value: true }]]
         }
     ])
     recorder.replay(t2)
@@ -91,10 +94,10 @@ const Order = types
         customer: types.maybeNull(types.reference(Customer))
     })
     .actions(self => {
-        function setCustomer(customer: typeof Customer.Type) {
+        function setCustomer(customer: Instance<typeof Customer>) {
             self.customer = customer
         }
-        function noopSetCustomer(_: typeof Customer.Type) {
+        function noopSetCustomer(_: Instance<typeof Customer>) {
             // noop
         }
         return {
@@ -152,7 +155,7 @@ if (process.env.NODE_ENV !== "production") {
         expect(() => {
             store.orders[0].setCustomer(store.orders[0] as any)
         }).toThrowError(
-            "[mobx-state-tree] Error while converting <Order@/orders/0> to `(reference(Customer) | null)`:\n\n    " +
+            "Error while converting <Order@/orders/0> to `(reference(Customer) | null)`:\n\n    " +
                 "value of type Order: <Order@/orders/0> is not assignable to type: `(reference(Customer) | null)`, expected an instance of `(reference(Customer) | null)` or a snapshot like `(reference(Customer) | null?)` instead."
         ) // wrong type!
     })
@@ -228,7 +231,7 @@ test("snapshot should be available and updated during an action", () => {
             x: types.number
         })
         .actions(self => {
-            function inc(): any {
+            function inc() {
                 self.x += 1
                 const res = getSnapshot(self).x
                 self.x += 1
@@ -241,7 +244,7 @@ test("snapshot should be available and updated during an action", () => {
     const a = Model.create({ x: 2 })
     expect(a.inc()).toBe(3)
     expect(a.x).toBe(4)
-    expect(getSnapshot<any>(a).x).toBe(4)
+    expect(getSnapshot(a).x).toBe(4)
 })
 
 test("indirectly called private functions should be able to modify state", () => {
@@ -297,16 +300,16 @@ test("volatile state survives reonciliation", () => {
 test("middleware events are correct", () => {
     const A = types.model({}).actions(self => ({
         a(x: number) {
-            return (self as any).b(x * 2)
+            return this.b(x * 2)
         },
         b(y: number) {
             return y + 1
         }
     }))
     const a = A.create()
-    const events: any[] = []
+    const events: IMiddlewareEvent[] = []
     addMiddleware(a, function(call, next) {
-        events.push({ ...call, context: {}, tree: {} }) // TODO: streep of some fields, since jest doesn't compare properly, restore in next jest version
+        events.push(call)
         return next(call)
     })
     a.a(7)
@@ -318,6 +321,7 @@ test("middleware events are correct", () => {
             name: "a",
             parentId: 0,
             rootId: process.env.NODE_ENV !== "production" ? 28 : 27,
+            allParentIds: [],
             tree: {},
             type: "action"
         },
@@ -328,6 +332,7 @@ test("middleware events are correct", () => {
             name: "b",
             parentId: process.env.NODE_ENV !== "production" ? 28 : 27,
             rootId: process.env.NODE_ENV !== "production" ? 28 : 27,
+            allParentIds: [process.env.NODE_ENV !== "production" ? 28 : 27],
             tree: {},
             type: "action"
         }
@@ -386,7 +391,7 @@ test("after attach action should work correctly", () => {
             todos: types.array(Todo)
         })
         .actions(self => ({
-            remove(todo: typeof Todo.Type) {
+            remove(todo: Instance<typeof Todo>) {
                 self.todos.remove(todo)
             }
         }))
@@ -394,7 +399,7 @@ test("after attach action should work correctly", () => {
     const s = S.create({
         todos: [{ title: "todo" }]
     })
-    const events: any[] = []
+    const events: ISerializedActionCall[] = []
     onAction(
         s,
         call => {

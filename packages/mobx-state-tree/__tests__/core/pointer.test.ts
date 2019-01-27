@@ -1,8 +1,8 @@
-import { types, unprotect, IAnyModelType } from "../../src"
+import { types, unprotect, IAnyModelType, castToReferenceSnapshot } from "../../src"
 
 function Pointer<IT extends IAnyModelType>(Model: IT) {
     return types.model("PointerOf" + Model.name, {
-        value: types.maybe(types.reference(Model as any))
+        value: types.maybe(types.reference(Model))
     })
 }
 const Todo = types.model("Todo", {
@@ -20,7 +20,7 @@ test("it should allow array of pointer objects", () => {
         selected: []
     })
     unprotect(store)
-    const ref = TodoPointer.create({ value: store.todos[0] }) // Fails because store.todos does not belongs to the same tree
+    const ref = TodoPointer.create({ value: castToReferenceSnapshot(store.todos[0]) }) // Fails because store.todos does not belongs to the same tree
     store.selected.push(ref)
     expect(store.selected[0].value).toBe(store.todos[0])
 })
@@ -51,7 +51,7 @@ test("it should allow array of pointer objects - 3", () => {
         selected: []
     })
     unprotect(store)
-    const ref = TodoPointer.create({ value: store.todos[0] })
+    const ref = TodoPointer.create({ value: castToReferenceSnapshot(store.todos[0]) })
     store.selected.push(ref)
     expect(store.selected[0].value).toBe(store.todos[0])
 })

@@ -7,8 +7,9 @@ import {
     getRoot,
     EMPTY_ARRAY,
     ObjectNode,
-    HookNames,
-    IAnyStateTreeNode
+    Hook,
+    IAnyStateTreeNode,
+    warnError
 } from "../internal"
 
 export type IMiddlewareEventType =
@@ -26,6 +27,7 @@ export type IMiddlewareEvent = {
     id: number
     parentId: number
     rootId: number
+    allParentIds: number[]
     context: IAnyStateTreeNode
     tree: IAnyStateTreeNode
     args: any[]
@@ -33,7 +35,7 @@ export type IMiddlewareEvent = {
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export type IMiddleware = {
     handler: IMiddlewareHandler
@@ -51,7 +53,15 @@ let currentActionContext: IMiddlewareEvent | null = null
 
 /**
  * @internal
- * @private
+ * @hidden
+ */
+export function getCurrentActionContext() {
+    return currentActionContext
+}
+
+/**
+ * @internal
+ * @hidden
  */
 export function getNextActionId() {
     return nextActionId++
@@ -60,7 +70,7 @@ export function getNextActionId() {
 // TODO: optimize away entire action context if there is no middleware in tree?
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function runWithActionContext(context: IMiddlewareEvent, fn: Function) {
     const node = getStateTreeNode(context.context)
@@ -68,7 +78,9 @@ export function runWithActionContext(context: IMiddlewareEvent, fn: Function) {
     const prevContext = currentActionContext
 
     if (context.type === "action") {
-        node.assertAlive()
+        node.assertAlive({
+            actionContext: context
+        })
     }
 
     node._isRunningAction = true
@@ -83,16 +95,16 @@ export function runWithActionContext(context: IMiddlewareEvent, fn: Function) {
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function getActionContext(): IMiddlewareEvent {
-    if (!currentActionContext) return fail("Not running an action!")
+    if (!currentActionContext) throw fail("Not running an action!")
     return currentActionContext
 }
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function createActionInvoker<T extends Function>(
     target: IAnyStateTreeNode,
@@ -110,7 +122,10 @@ export function createActionInvoker<T extends Function>(
                 context: target,
                 tree: getRoot(target),
                 rootId: currentActionContext ? currentActionContext.rootId : id,
-                parentId: currentActionContext ? currentActionContext.id : 0
+                parentId: currentActionContext ? currentActionContext.id : 0,
+                allParentIds: currentActionContext
+                    ? [...currentActionContext.allParentIds, currentActionContext.id]
+                    : []
             },
             fn
         )
@@ -123,12 +138,11 @@ export function createActionInvoker<T extends Function>(
  * Middleware can be used to intercept any action is invoked on the subtree where it is attached.
  * If a tree is protected (by default), this means that any mutation of the tree will pass through your middleware.
  *
- * For more details, see the [middleware docs](docs/middleware.md)
+ * For more details, see the [middleware docs](../middleware.md)
  *
- * @export
- * @param {IStateTreeNode} target
- * @param {(action: IRawActionCall, next: (call: IRawActionCall) => any) => any} middleware
- * @returns {IDisposer}
+ * @param target Node to apply the middleware to.
+ * @param middleware Middleware to apply.
+ * @returns A callable function to dispose the middleware.
  */
 export function addMiddleware(
     target: IAnyStateTreeNode,
@@ -137,18 +151,20 @@ export function addMiddleware(
 ): IDisposer {
     const node = getStateTreeNode(target)
     if (process.env.NODE_ENV !== "production") {
-        if (!node.isProtectionEnabled)
-            console.warn(
+        if (!node.isProtectionEnabled) {
+            warnError(
                 "It is recommended to protect the state tree before attaching action middleware, as otherwise it cannot be guaranteed that all changes are passed through middleware. See `protect`"
             )
+        }
     }
     return node.addMiddleWare(handler, includeHooks)
 }
 
 /**
- * Binds middleware to a specific action
+ * Binds middleware to a specific action.
  *
- * @example
+ * Example:
+ * ```ts
  * type.actions(self => {
  *   function takeA____() {
  *       self.toilet.donate()
@@ -160,12 +176,11 @@ export function addMiddleware(
  *     takeA____: decorate(atomic, takeA____)
  *   }
  * })
+ * ```
  *
- * @export
- * @template T
- * @param {IMiddlewareHandler} handler
- * @param Function} fn
- * @returns the original function
+ * @param handler
+ * @param fn
+ * @returns The original function
  */
 export function decorate<T extends Function>(handler: IMiddlewareHandler, fn: T): T {
     const middleware: IMiddleware = { handler, includeHooks: true }
@@ -228,7 +243,7 @@ function runMiddleWares(node: ObjectNode, baseCall: IMiddlewareEvent, originalFn
             if (process.env.NODE_ENV !== "production") {
                 if (!nextInvoked && !abortInvoked) {
                     const node2 = getStateTreeNode(call.tree)
-                    fail(
+                    throw fail(
                         `Neither the next() nor the abort() callback within the middleware ${
                             handler.name
                         } for the action: "${call.name}" on the node: ${
@@ -238,7 +253,7 @@ function runMiddleWares(node: ObjectNode, baseCall: IMiddlewareEvent, originalFn
                 }
                 if (nextInvoked && abortInvoked) {
                     const node2 = getStateTreeNode(call.tree)
-                    fail(
+                    throw fail(
                         `The next() and abort() callback within the middleware ${
                             handler.name
                         } for the action: "${call.name}" on the node: ${
@@ -253,7 +268,7 @@ function runMiddleWares(node: ObjectNode, baseCall: IMiddlewareEvent, originalFn
         if (handler && middleware.includeHooks) {
             return invokeHandler()
         } else if (handler && !middleware.includeHooks) {
-            if ((HookNames as any)[call.name]) return runNextMiddleware(call)
+            if ((Hook as any)[call.name]) return runNextMiddleware(call)
             return invokeHandler()
         } else {
             return mobxAction(originalFn).apply(null, call.args)

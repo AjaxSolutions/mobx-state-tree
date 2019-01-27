@@ -1,51 +1,57 @@
-// based on: https://github.com/mobxjs/mobx-utils/blob/master/src/async-action.ts
+/** @hidden */
+export interface FlowYield {
+    // fake, only for typing
+    "!!flowYield": undefined
+}
 
-export function flow<R>(generator: () => IterableIterator<any>): () => Promise<R>
-export function flow<A1>(generator: (a1: A1) => IterableIterator<any>): (a1: A1) => Promise<any> // Ideally we want to have R instead of Any, but cannot specify R without specifying A1 etc... 'any' as result is better then not specifying request args
-export function flow<A1, A2>(
-    generator: (a1: A1, a2: A2) => IterableIterator<any>
-): (a1: A1, a2: A2) => Promise<any>
-export function flow<A1, A2, A3>(
-    generator: (a1: A1, a2: A2, a3: A3) => IterableIterator<any>
-): (a1: A1, a2: A2, a3: A3) => Promise<any>
-export function flow<A1, A2, A3, A4>(
-    generator: (a1: A1, a2: A2, a3: A3, a4: A4) => IterableIterator<any>
-): (a1: A1, a2: A2, a3: A3, a4: A4) => Promise<any>
-export function flow<A1, A2, A3, A4, A5>(
-    generator: (a1: A1, a2: A2, a3: A3, a4: A4, a5: A5) => IterableIterator<any>
-): (a1: A1, a2: A2, a3: A3, a4: A4, a5: A5) => Promise<any>
-export function flow<A1, A2, A3, A4, A5, A6>(
-    generator: (a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6) => IterableIterator<any>
-): (a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6) => Promise<any>
-export function flow<A1, A2, A3, A4, A5, A6, A7>(
-    generator: (a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7) => IterableIterator<any>
-): (a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7) => Promise<any>
-export function flow<A1, A2, A3, A4, A5, A6, A7, A8>(
-    generator: (
-        a1: A1,
-        a2: A2,
-        a3: A3,
-        a4: A4,
-        a5: A5,
-        a6: A6,
-        a7: A7,
-        a8: A8
-    ) => IterableIterator<any>
-): (a1: A1, a2: A2, a3: A3, a4: A4, a5: A5, a6: A6, a7: A7, a8: A8) => Promise<any>
+/** @hidden */
+export interface FlowReturn<T> {
+    // fake, only for typing
+    "!!flowReturn": T
+}
+
+// we skip promises that are the result of yielding promises (except if they use flowReturn)
+/** @hidden */
+export type FlowReturnType<R> = IfAllAreFlowYieldThenVoid<
+    R extends FlowReturn<infer FR>
+        ? FR extends Promise<infer FRP>
+            ? FRP
+            : FR
+        : R extends Promise<any>
+        ? FlowYield
+        : R
+>
+
+// we extract yielded promises from the return type
+/** @hidden */
+export type IfAllAreFlowYieldThenVoid<R> = Exclude<R, FlowYield> extends never
+    ? void
+    : Exclude<R, FlowYield>
+
 /**
  * See [asynchronous actions](https://github.com/mobxjs/mobx-state-tree/blob/master/docs/async-actions.md).
  *
- * @export
- * @alias flow
- * @returns {Promise}
+ * @returns The flow as a promise.
  */
-export function flow(asyncAction: any): any {
-    return createFlowSpawner(asyncAction.name, asyncAction)
+export function flow<R, Args extends any[]>(
+    generator: (...args: Args) => IterableIterator<R>
+): (...args: Args) => Promise<FlowReturnType<R>> {
+    return createFlowSpawner(generator.name, generator) as any
+}
+
+/**
+ *  Used for TypeScript to make flows that return a promise return the actual promise result.
+ *
+ * @param val
+ * @returns
+ */
+export function castFlowReturn<T>(val: T): FlowReturn<T> {
+    return val as any
 }
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function createFlowSpawner(name: string, generator: Function) {
     const spawner = function flowSpawner(this: any) {
@@ -65,6 +71,7 @@ export function createFlowSpawner(name: string, generator: Function) {
                     tree: baseContext.tree,
                     context: baseContext.context,
                     parentId: baseContext.id,
+                    allParentIds: [...baseContext.allParentIds, baseContext.id],
                     rootId: baseContext.rootId
                 },
                 fn
@@ -88,6 +95,7 @@ export function createFlowSpawner(name: string, generator: Function) {
                     tree: baseContext.tree,
                     context: baseContext.context,
                     parentId: baseContext.id,
+                    allParentIds: [...baseContext.allParentIds, baseContext.id],
                     rootId: baseContext.rootId
                 },
                 init
@@ -134,7 +142,7 @@ export function createFlowSpawner(name: string, generator: Function) {
                 }
                 // TODO: support more type of values? See https://github.com/tj/co/blob/249bbdc72da24ae44076afd716349d2089b31c4c/index.js#L100
                 if (!ret.value || typeof ret.value.then !== "function")
-                    fail("Only promises can be yielded to `async`, got: " + ret)
+                    throw fail("Only promises can be yielded to `async`, got: " + ret)
                 return ret.value.then(onFulfilled, onRejected)
             }
         })

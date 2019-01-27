@@ -72,7 +72,7 @@ function createTestStore(listener: (s: string) => void) {
 // NOTE: as we defer creation (and thus, hooks) till first real access,
 // some of original hooks do not fire at all
 test("it should trigger lifecycle hooks", () => {
-    const events: any[] = []
+    const events: string[] = []
     const { store, Todo } = createTestStore(e => events.push(e))
     const talk = detach(store.todos[2])
     events.push("-")
@@ -95,16 +95,17 @@ test("it should trigger lifecycle hooks", () => {
         "new todo: add sugar",
         "attach todo: add sugar",
         "---",
+        "destroy todo: add sugar",
         "custom disposer 2 for add sugar",
         "custom disposer 1 for add sugar",
-        "destroy todo: add sugar",
-        "custom disposer for store",
         "destroy store: 2",
+        "custom disposer for store",
+        "destroy todo: Give talk",
         "custom disposer 2 for Give talk",
-        "custom disposer 1 for Give talk",
-        "destroy todo: Give talk"
+        "custom disposer 1 for Give talk"
     ])
 })
+
 type CarSnapshot = { id: string }
 const Car = types
     .model("Car", {
@@ -152,7 +153,7 @@ test("it should postprocess snapshots when generating snapshot - 1", () => {
 })
 test("it should not apply postprocessor to snapshot on getSnapshot", () => {
     const car = Car.create({ id: "1" })
-    let error: any = false
+    let error = false
     onSnapshot(car, snapshot => {
         error = true
     })
@@ -161,9 +162,7 @@ test("it should not apply postprocessor to snapshot on getSnapshot", () => {
     expect(error).toBeFalsy()
 })
 test("it should preprocess snapshots when creating as property type", () => {
-    const f = Factory.create({
-        car: { id: "1" }
-    })
+    const f = Factory.create({ car: { id: "1" } })
     expect(f.car.id).toBe(2)
 })
 test("it should preprocess snapshots when updating", () => {
@@ -184,7 +183,7 @@ test("it should postprocess non-initialized children", () => {
 })
 
 test("base hooks can be composed", () => {
-    const events: any[] = []
+    const events: string[] = []
     function listener(message: string) {
         events.push(message)
     }
@@ -259,4 +258,13 @@ test("snapshot processors can be composed", () => {
     const x = X.create({ x: 25 })
     expect(x.x).toBe(2)
     expect(getSnapshot(x).x).toBe(25)
+})
+
+test("addDisposer must return the passed disposer", () => {
+    const listener = jest.fn()
+    const M = types.model({}).actions(self => {
+        expect(addDisposer(self, listener)).toBe(listener)
+        return {}
+    })
+    M.create()
 })

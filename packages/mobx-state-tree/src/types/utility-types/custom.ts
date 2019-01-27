@@ -13,26 +13,25 @@ import {
 } from "../../internal"
 
 export interface CustomTypeOptions<S, T> {
-    // Friendly name
+    /** Friendly name */
     name: string
-    // given a serialized value, how to turn it into the target type
+    /** given a serialized value, how to turn it into the target type */
     fromSnapshot(snapshot: S): T
-    // return the serialization of the current value
+    /** return the serialization of the current value */
     toSnapshot(value: T): S
-    // if true, this is a converted value, if false, it's a snapshot
+    /** if true, this is a converted value, if false, it's a snapshot */
     isTargetType(value: T | S): boolean
-    // a non empty string is assumed to be a validation error
+    /** a non empty string is assumed to be a validation error */
     getValidationMessage(snapshot: S): string
     // TODO: isSnapshotEqual
     // TODO: isValueEqual
 }
 
 /**
- * Creates a custom type. Custom types can be used for arbitrary immutable values, that have a serializable representation. For example, to create your own Date representation, Decimal type etc.
+ * `types.custom` - Creates a custom type. Custom types can be used for arbitrary immutable values, that have a serializable representation. For example, to create your own Date representation, Decimal type etc.
  *
  * The signature of the options is:
- *
- * ```javascript
+ * ```ts
  * export interface CustomTypeOptions<S, T> {
  *     // Friendly name
  *     name: string
@@ -47,7 +46,8 @@ export interface CustomTypeOptions<S, T> {
  * }
  * ```
  *
- * @example
+ * Example:
+ * ```ts
  * const DecimalPrimitive = types.custom<string, Decimal>({
  *     name: "Decimal",
  *     fromSnapshot(value: string) {
@@ -68,13 +68,10 @@ export interface CustomTypeOptions<S, T> {
  * const Wallet = types.model({
  *     balance: DecimalPrimitive
  * })
+ * ```
  *
- * @export
- * @alias types.custom
- * @template S
- * @template T
- * @param {CustomTypeOptions<S, T>} options
- * @returns {(IType<S | T, S, T>)}
+ * @param options
+ * @returns
  */
 export function custom<S, T>(options: CustomTypeOptions<S, T>): IType<S | T, S, T> {
     return new CustomType(options)
@@ -82,9 +79,9 @@ export function custom<S, T>(options: CustomTypeOptions<S, T>): IType<S | T, S, 
 
 /**
  * @internal
- * @private
+ * @hidden
  */
-export class CustomType<S, T> extends Type<S, S, T> {
+export class CustomType<C, S, T> extends Type<C, S, T> {
     readonly flags = TypeFlags.Reference
     readonly shouldAttachNode = false
 
@@ -144,7 +141,7 @@ export class CustomType<S, T> extends Type<S, S, T> {
         const newNode = this.instantiate(
             current.parent,
             current.subpath,
-            current._environment,
+            current.environment,
             valueToStore
         )
         current.die()

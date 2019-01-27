@@ -1,4 +1,20 @@
-import { getSnapshot, unprotect, recordPatches, types, IType, IJsonPatch } from "../../src"
+import {
+    getSnapshot,
+    unprotect,
+    recordPatches,
+    types,
+    IType,
+    IJsonPatch,
+    Instance,
+    cast,
+    IAnyModelType,
+    IMSTMap,
+    escapeJsonPath,
+    getPath,
+    resolvePath,
+    splitJsonPath,
+    joinJsonPath
+} from "../../src"
 
 function testPatches<C, S, T>(
     type: IType<C, S, T>,
@@ -19,16 +35,17 @@ function testPatches<C, S, T>(
     recorder.undo()
     expect(getSnapshot(instance)).toEqual(baseSnapshot)
 }
-const Node: any = types.model("Node", {
+const Node = types.model("Node", {
     id: types.identifierNumber,
     text: "Hi",
-    children: types.optional(types.array(types.late(() => Node)), [])
+    children: types.optional(types.array(types.late((): IAnyModelType => Node)), [])
 })
+
 test("it should apply simple patch", () => {
     testPatches(
         Node,
         { id: 1 },
-        (n: any) => {
+        (n: Instance<typeof Node>) => {
             n.text = "test"
         },
         [
@@ -40,16 +57,18 @@ test("it should apply simple patch", () => {
         ]
     )
 })
+
 test("it should apply deep patches to arrays", () => {
     testPatches(
         Node,
         { id: 1, children: [{ id: 2 }] },
-        (n: any) => {
-            n.children[0].text = "test" // update
-            n.children[0] = { id: 2, text: "world" } // this reconciles; just an update
-            n.children[0] = { id: 4, text: "coffee" } // new object
-            n.children[1] = { id: 3, text: "world" } // addition
-            n.children.splice(0, 1) // removal
+        (n: Instance<typeof Node>) => {
+            const children = n.children as Instance<typeof Node>[]
+            children[0].text = "test" // update
+            children[0] = cast({ id: 2, text: "world" }) // this reconciles; just an update
+            children[0] = cast({ id: 4, text: "coffee" }) // new object
+            children[1] = cast({ id: 3, text: "world" }) // addition
+            children.splice(0, 1) // removal
         },
         [
             {
@@ -87,14 +106,16 @@ test("it should apply deep patches to arrays", () => {
         ]
     )
 })
+
 test("it should apply deep patches to arrays with object instances", () => {
     testPatches(
         Node,
         { id: 1, children: [{ id: 2 }] },
-        (n: any) => {
-            n.children[0].text = "test" // update
-            n.children[0] = Node.create({ id: 2, text: "world" }) // this does not reconcile, new instance is provided
-            n.children[0] = Node.create({ id: 4, text: "coffee" }) // new object
+        (n: Instance<typeof Node>) => {
+            const children = n.children as Instance<typeof Node>[]
+            children[0].text = "test" // update
+            children[0] = Node.create({ id: 2, text: "world" }) // this does not reconcile, new instance is provided
+            children[0] = Node.create({ id: 4, text: "coffee" }) // new object
         },
         [
             {
@@ -123,15 +144,19 @@ test("it should apply deep patches to arrays with object instances", () => {
         ]
     )
 })
+
 test("it should apply non flat patches", () => {
     testPatches(
         Node,
         { id: 1 },
-        (n: any) => {
-            n.children.push({
-                id: 2,
-                children: [{ id: 4 }, { id: 5, text: "Tea" }]
-            })
+        (n: Instance<typeof Node>) => {
+            const children = n.children as Instance<typeof Node>[]
+            children.push(
+                cast({
+                    id: 2,
+                    children: [{ id: 4 }, { id: 5, text: "Tea" }]
+                })
+            )
         },
         [
             {
@@ -157,12 +182,14 @@ test("it should apply non flat patches", () => {
         ]
     )
 })
+
 test("it should apply non flat patches with object instances", () => {
     testPatches(
         Node,
         { id: 1 },
-        (n: any) => {
-            n.children.push(
+        (n: Instance<typeof Node>) => {
+            const children = n.children as Instance<typeof Node>[]
+            children.push(
                 Node.create({
                     id: 2,
                     children: [{ id: 5, text: "Tea" }]
@@ -188,27 +215,29 @@ test("it should apply non flat patches with object instances", () => {
         ]
     )
 })
+
 test("it should apply deep patches to maps", () => {
     // If user does not transpile const/let to var, trying to call Late' subType
     // property getter during map's tryCollectModelTypes() will throw ReferenceError.
     // But if it's transpiled to var, then subType will become 'undefined'.
-    const NodeMap: any = types.model("NodeMap", {
+    const NodeMap = types.model("NodeMap", {
         id: types.identifierNumber,
         text: "Hi",
-        children: types.optional(types.map(types.late(() => NodeMap)), {})
+        children: types.optional(types.map(types.late((): IAnyModelType => NodeMap)), {})
     })
     testPatches(
         NodeMap,
         { id: 1, children: { 2: { id: 2 } } },
-        (n: any) => {
-            n.children.get("2").text = "test" // update
-            n.children.put({ id: 2, text: "world" }) // this reconciles; just an update
-            n.children.set(
+        (n: Instance<typeof NodeMap>) => {
+            const children = n.children as IMSTMap<typeof NodeMap>
+            children.get("2")!.text = "test" // update
+            children.put({ id: 2, text: "world" }) // this reconciles; just an update
+            children.set(
                 "4",
                 NodeMap.create({ id: 4, text: "coffee", children: { 23: { id: 23 } } })
             ) // new object
-            n.children.put({ id: 3, text: "world", children: { 7: { id: 7 } } }) // addition
-            n.children.delete("2") // removal
+            children.put({ id: 3, text: "world", children: { 7: { id: 7 } } }) // addition
+            children.delete("2") // removal
         },
         [
             {
@@ -258,20 +287,21 @@ test("it should apply deep patches to maps", () => {
         ]
     )
 })
+
 test("it should apply deep patches to objects", () => {
-    const NodeObject: any = types.model("NodeObject", {
+    const NodeObject = types.model("NodeObject", {
         id: types.identifierNumber,
         text: "Hi",
-        child: types.maybe(types.late(() => NodeObject))
+        child: types.maybe(types.late((): IAnyModelType => NodeObject))
     })
     testPatches(
         NodeObject,
         { id: 1, child: { id: 2 } },
-        (n: any) => {
-            n.child.text = "test" // update
-            n.child = { id: 2, text: "world" } // this reconciles; just an update
+        (n: Instance<typeof NodeObject>) => {
+            n.child!.text = "test" // update
+            n.child = cast({ id: 2, text: "world" }) // this reconciles; just an update
             n.child = NodeObject.create({ id: 2, text: "coffee", child: { id: 23 } })
-            n.child = { id: 3, text: "world", child: { id: 7 } } // addition
+            n.child = cast({ id: 3, text: "world", child: { id: 7 } }) // addition
             n.child = undefined // removal
         },
         [
@@ -319,7 +349,50 @@ test("it should apply deep patches to objects", () => {
         ]
     )
 })
+
+test("it should correctly split/join json patches", () => {
+    function isValid(str: string, array: string[], altStr?: string) {
+        expect(splitJsonPath(str)).toEqual(array)
+        expect(joinJsonPath(array)).toBe(altStr !== undefined ? altStr : str)
+    }
+
+    isValid("", [])
+    isValid("/", [""])
+    isValid("//", ["", ""])
+    isValid("/a", ["a"])
+    isValid("/a/", ["a", ""])
+    isValid("/a//", ["a", "", ""])
+    isValid(".", ["."])
+    isValid("..", [".."])
+    isValid("./a", [".", "a"])
+    isValid("../a", ["..", "a"])
+    isValid("/.a", [".a"])
+    isValid("/..a", ["..a"])
+
+    // rooted relatives are equivalent to plain relatives
+    isValid("/.", ["."], ".")
+    isValid("/..", [".."], "..")
+    isValid("/./a", [".", "a"], "./a")
+    isValid("/../a", ["..", "a"], "../a")
+
+    function isInvalid(str: string) {
+        expect(() => {
+            splitJsonPath(str)
+        }).toThrow("a json path must be either rooted, empty or relative")
+    }
+
+    isInvalid("a")
+    isInvalid("a/")
+    isInvalid("a//")
+    isInvalid(".a")
+    isInvalid(".a/")
+    isInvalid("..a")
+    isInvalid("..a/")
+})
+
 test("it should correctly escape/unescape json patches", () => {
+    expect(escapeJsonPath("http://example.com")).toBe("http:~1~1example.com")
+
     const AppStore = types.model({
         items: types.map(types.frozen<any>())
     })
@@ -329,6 +402,81 @@ test("it should correctly escape/unescape json patches", () => {
         (store: typeof AppStore.Type) => {
             store.items.set("with/slash~tilde", 1)
         },
-        [{ op: "add", path: "/items/with~0slash~1tilde", value: 1 }]
+        [{ op: "add", path: "/items/with~1slash~0tilde", value: 1 }]
     )
+})
+
+test("weird keys are handled correctly", () => {
+    const Store = types.model({
+        map: types.map(
+            types.model({
+                model: types.model({
+                    value: types.string
+                })
+            })
+        )
+    })
+
+    const store = Store.create({
+        map: {
+            "": { model: { value: "val1" } },
+            "/": { model: { value: "val2" } },
+            "~": { model: { value: "val3" } }
+        }
+    })
+
+    {
+        const target = store.map.get("")!.model
+        const path = getPath(target)
+        expect(path).toBe("/map//model")
+        expect(resolvePath(store, path)).toBe(target)
+    }
+    {
+        const target = store.map.get("/")!.model
+        const path = getPath(target)
+        expect(path).toBe("/map/~1/model")
+        expect(resolvePath(store, path)).toBe(target)
+    }
+    {
+        const target = store.map.get("~")!.model
+        const path = getPath(target)
+        expect(path).toBe("/map/~0/model")
+        expect(resolvePath(store, path)).toBe(target)
+    }
+})
+
+test("relativePath with a different base than the root works correctly", () => {
+    const Store = types.model({
+        map: types.map(
+            types.model({
+                model: types.model({
+                    value: types.string
+                })
+            })
+        )
+    })
+
+    const store = Store.create({
+        map: {
+            "1": { model: { value: "val1" } },
+            "2": { model: { value: "val2" } }
+        }
+    })
+
+    {
+        const target = store.map.get("1")!.model
+        expect(resolvePath(store.map, "./1/model")).toBe(target)
+        expect(resolvePath(store.map, "../map/1/model")).toBe(target)
+        // rooted relative should resolve to the given base as root
+        expect(resolvePath(store.map, "/./1/model")).toBe(target)
+        expect(resolvePath(store.map, "/../map/1/model")).toBe(target)
+    }
+    {
+        const target = store.map.get("2")!.model
+        expect(resolvePath(store.map, "./2/model")).toBe(target)
+        expect(resolvePath(store.map, "../map/2/model")).toBe(target)
+        // rooted relative should resolve to the given base as root
+        expect(resolvePath(store.map, "/./2/model")).toBe(target)
+        expect(resolvePath(store.map, "/../map/2/model")).toBe(target)
+    }
 })

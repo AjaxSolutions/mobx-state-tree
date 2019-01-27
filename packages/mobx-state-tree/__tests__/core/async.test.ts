@@ -4,12 +4,16 @@ import {
     recordActions,
     flow,
     decorate,
-    destroy
+    destroy,
+    IMiddlewareHandler,
+    IMiddlewareEvent,
+    IMiddlewareEventType,
+    castFlowReturn
     // TODO: export IRawActionCall
 } from "../../src"
 import { reaction, configure } from "mobx"
 
-function delay(time: number, value: any, shouldThrow = false) {
+function delay<TV>(time: number, value: TV, shouldThrow = false): Promise<TV> {
     return new Promise((resolve, reject) => {
         setTimeout(() => {
             if (shouldThrow) reject(value)
@@ -20,9 +24,11 @@ function delay(time: number, value: any, shouldThrow = false) {
 
 function testCoffeeTodo(
     done: () => void,
-    generator: any,
+    generator: (
+        self: any
+    ) => ((str: string) => IterableIterator<Promise<any> | string | undefined>),
     shouldError: boolean,
-    resultValue: any,
+    resultValue: string | undefined,
     producedCoffees: any[]
 ) {
     configure({ enforceActions: true })
@@ -31,9 +37,9 @@ function testCoffeeTodo(
             title: "get coffee"
         })
         .actions(self => ({
-            startFetch: flow(generator(self)) as (str: string) => Promise<string>
+            startFetch: flow(generator(self))
         }))
-    const events: any[] = []
+    const events: IMiddlewareEvent[] = []
     const coffees: any[] = []
     const t1 = Todo.create({})
     addMiddleware(t1, (c, next) => {
@@ -41,7 +47,7 @@ function testCoffeeTodo(
         return next(c)
     })
     reaction(() => t1.title, coffee => coffees.push(coffee))
-    function handleResult(res: any) {
+    function handleResult(res: string | undefined) {
         expect(res).toBe(resultValue)
         expect(coffees).toEqual(producedCoffees)
         const filtered = filterRelevantStuff(events)
@@ -75,7 +81,7 @@ test("flow happens in single ticks", done => {
             })
         }))
     const x = X.create()
-    const values: any[] = []
+    const values: number[] = []
     reaction(() => x.y, v => values.push(v))
     x.p().then(() => {
         expect(x.y).toBe(5)
@@ -86,7 +92,7 @@ test("flow happens in single ticks", done => {
 test("can handle async actions", done => {
     testCoffeeTodo(
         done,
-        (self: any) =>
+        self =>
             function* fetchData(kind: string) {
                 self.title = "getting coffee " + kind
                 self.title = yield delay(100, "drinking coffee")
@@ -100,8 +106,8 @@ test("can handle async actions", done => {
 test("can handle erroring actions", done => {
     testCoffeeTodo(
         done,
-        (self: any) =>
-            function* fetchData(kind: string): IterableIterator<any> {
+        self =>
+            function* fetchData(kind: string): IterableIterator<never> {
                 throw kind
             },
         true,
@@ -112,8 +118,8 @@ test("can handle erroring actions", done => {
 test("can handle try catch", t => {
     testCoffeeTodo(
         t,
-        (self: any) =>
-            function* fetchData(kind: string): IterableIterator<any> {
+        self =>
+            function* fetchData(kind: string) {
                 try {
                     yield delay(10, "tea", true)
                 } catch (e) {
@@ -129,7 +135,7 @@ test("can handle try catch", t => {
 test("empty sequence works", t => {
     testCoffeeTodo(
         t,
-        (self: any) => function* fetchData(kind: string): IterableIterator<any> {},
+        () => function* fetchData(kind: string): IterableIterator<undefined> {},
         false,
         undefined,
         []
@@ -138,8 +144,8 @@ test("empty sequence works", t => {
 test("can handle throw from yielded promise works", t => {
     testCoffeeTodo(
         t,
-        (self: any) =>
-            function* fetchData(kind: string): IterableIterator<any> {
+        () =>
+            function* fetchData(kind: string) {
                 yield delay(10, "x", true)
             },
         true,
@@ -148,27 +154,23 @@ test("can handle throw from yielded promise works", t => {
     )
 })
 test("typings", done => {
-    const M = types
-        .model({
-            title: types.string
+    const M = types.model({ title: types.string }).actions(self => {
+        function* a(x: string) {
+            yield delay(10, "x", false)
+            self.title = "7"
+            return 23
+        }
+        // tslint:disable-next-line:no-shadowed-variable
+        const b = flow(function* b(x: string) {
+            yield delay(10, "x", false)
+            self.title = "7"
+            return 24
         })
-        .actions(self => {
-            function* a(x: string) {
-                yield delay(10, "x", false)
-                self.title = "7"
-                return 23
-            }
-            // tslint:disable-next-line:no-shadowed-variable
-            const b = flow(function* b(x: string) {
-                yield delay(10, "x", false)
-                self.title = "7"
-                return 24
-            })
-            return { a: flow(a), b }
-        })
+        return { a: flow(a), b }
+    })
     const m1 = M.create({ title: "test " })
-    const resA = m1.a("z") // Arg typings are correct. TODO: Result type is incorrect; any
-    const resB = m1.b("z") // Arg typings are correct, TODO: Result is correctly promise, but incorrect generic arg
+    const resA = m1.a("z")
+    const resB = m1.b("z")
     Promise.all([resA, resB]).then(([x1, x2]) => {
         expect(x1).toBe(23)
         expect(x2).toBe(24)
@@ -176,27 +178,23 @@ test("typings", done => {
     })
 })
 test("typings", done => {
-    const M = types
-        .model({
-            title: types.string
+    const M = types.model({ title: types.string }).actions(self => {
+        function* a(x: string) {
+            yield delay(10, "x", false)
+            self.title = "7"
+            return 23
+        }
+        // tslint:disable-next-line:no-shadowed-variable
+        const b = flow(function* b(x: string) {
+            yield delay(10, "x", false)
+            self.title = "7"
+            return 24
         })
-        .actions(self => {
-            function* a(x: string) {
-                yield delay(10, "x", false)
-                self.title = "7"
-                return 23
-            }
-            // tslint:disable-next-line:no-shadowed-variable
-            const b = flow(function* b(x: string) {
-                yield delay(10, "x", false)
-                self.title = "7"
-                return 24
-            })
-            return { a: flow(a), b }
-        })
+        return { a: flow(a), b }
+    })
     const m1 = M.create({ title: "test " })
-    const resA = m1.a("z") // Arg typings are correct. TODO: Result type is incorrect; any
-    const resB = m1.b("z") // Arg typings are correct, TODO: Result is correctly promise, but incorrect generic arg
+    const resA = m1.a("z")
+    const resB = m1.b("z")
     Promise.all([resA, resB]).then(([x1, x2]) => {
         expect(x1).toBe(23)
         expect(x2).toBe(24)
@@ -246,7 +244,7 @@ test("can handle nested async actions", t => {
     })
     testCoffeeTodo(
         t,
-        (self: any) =>
+        self =>
             function* fetchData(kind: string) {
                 self.title = yield uppercase("drinking " + kind)
                 return self.title
@@ -257,8 +255,8 @@ test("can handle nested async actions", t => {
     )
 })
 test("can handle nested async actions when using decorate", done => {
-    const events: any[] = []
-    function middleware(call: any, next: any) {
+    const events: [IMiddlewareEventType, string][] = []
+    const middleware: IMiddlewareHandler = (call, next) => {
         events.push([call.type, call.name])
         return next(call)
     }
@@ -295,7 +293,7 @@ test("flow gain back control when node become not alive during yield", async () 
     const MyModel = types.model({}).actions(() => {
         return {
             doAction() {
-                return flow<void>(function*() {
+                return flow(function*() {
                     try {
                         yield delay(20, "").then(() => Promise.reject(rejectError))
                     } catch (e) {
@@ -317,10 +315,39 @@ test("flow gain back control when node become not alive during yield", async () 
     }
 })
 
-function filterRelevantStuff(stuff: any) {
+function filterRelevantStuff(stuff: IMiddlewareEvent[]) {
     return stuff.map((x: any) => {
         delete x.context
         delete x.tree
         return x
     })
 }
+
+test("flow typings", async () => {
+    const promise = Promise.resolve()
+
+    const M = types.model({ x: 5 }).actions(self => ({
+        // should be () => Promise<void>
+        voidToVoid: flow(function*() {
+            yield promise
+        }), // should be (val: number) => Promise<number>
+        numberToNumber: flow(function*(val: number) {
+            yield promise
+            return val
+        }), // should be () => Promise<number>
+        voidToNumber: flow(function*() {
+            yield promise
+            return castFlowReturn(Promise.resolve(2))
+        })
+    }))
+
+    const m = M.create()
+
+    // these should compile
+    const a: void = await m.voidToVoid()
+    expect(a).toBe(undefined)
+    const b: number = await m.numberToNumber(4)
+    expect(b).toBe(4)
+    const c: number = await m.voidToNumber()
+    expect(c).toBe(2)
+})

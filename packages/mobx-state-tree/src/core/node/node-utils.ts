@@ -5,13 +5,13 @@ import {
     joinJsonPath,
     ScalarNode,
     IChildNodesMap,
-    IAnyType,
-    EMPTY_ARRAY
+    EMPTY_ARRAY,
+    INode
 } from "../../internal"
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export enum NodeLifeCycle {
     INITIALIZING, // setting up
@@ -22,35 +22,33 @@ export enum NodeLifeCycle {
 }
 
 /**
- * @internal
- * @private
+ * Common interface that represents a node instance.
+ * @hidden
  */
-export interface INode {
-    readonly type: IAnyType
-    readonly storedValue: any
-    readonly path: string
-    readonly isRoot: boolean
-    readonly parent: ObjectNode | null
-    readonly root: ObjectNode
-    readonly _environment: any
-    subpath: string
-
-    isAlive: boolean
-    readonly value: any
-    readonly snapshot: any
-    getSnapshot(): any
-
-    setParent(newParent: ObjectNode | null, subpath?: string | null): void
-    die(): void
-}
-
 export interface IStateTreeNode<C = any, S = any> {
     readonly $treenode?: any
     // fake, will never be present, just for typing
     // we use this weird trick to allow reference types to work
-    readonly $types?: [C, S] | [any, any]
+    readonly "!!types"?: [C, S] | [any, any]
 }
 
+type Omit<T, K> = Pick<T, Exclude<keyof T, K>>
+
+/** @hidden */
+export type RedefineIStateTreeNode<T, STN extends IAnyStateTreeNode> = T extends IAnyStateTreeNode
+    ? Omit<T, "!!types"> & STN
+    : T
+
+/** @hidden */
+export type ExtractNodeC<T> = T extends IStateTreeNode<infer C, any> ? C : never
+
+/** @hidden */
+export type ExtractNodeS<T> = T extends IStateTreeNode<any, infer S> ? S : never
+
+/**
+ * Represents any state tree node instance.
+ * @hidden
+ */
 export interface IAnyStateTreeNode extends IStateTreeNode<any, any> {}
 
 /**
@@ -58,9 +56,8 @@ export interface IAnyStateTreeNode extends IStateTreeNode<any, any> {}
  * More precisely, that is, if the value is an instance of a
  * `types.model`, `types.array` or `types.map`.
  *
- * @export
- * @param {*} value
- * @returns {value is IStateTreeNode}
+ * @param value
+ * @returns true if the value is a state tree node.
  */
 export function isStateTreeNode<C = any, S = any>(value: any): value is IStateTreeNode<C, S> {
     return !!(value && value.$treenode)
@@ -68,16 +65,16 @@ export function isStateTreeNode<C = any, S = any>(value: any): value is IStateTr
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function getStateTreeNode(value: IAnyStateTreeNode): ObjectNode {
     if (isStateTreeNode(value)) return value.$treenode!
-    else return fail(`Value ${value} is no MST Node`)
+    else throw fail(`Value ${value} is no MST Node`)
 }
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function getStateTreeNodeSafe(value: IAnyStateTreeNode): ObjectNode {
     return (value && value.$treenode) || null
@@ -85,7 +82,7 @@ export function getStateTreeNodeSafe(value: IAnyStateTreeNode): ObjectNode {
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function canAttachNode(value: any) {
     return (
@@ -99,7 +96,7 @@ export function canAttachNode(value: any) {
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function toJSON<S>(this: IStateTreeNode<any, S>): S {
     return getStateTreeNode(this).snapshot
@@ -109,14 +106,15 @@ const doubleDot = (_: any) => ".."
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function getRelativePathBetweenNodes(base: ObjectNode, target: ObjectNode): string {
     // PRE condition target is (a child of) base!
-    if (base.root !== target.root)
-        fail(
+    if (base.root !== target.root) {
+        throw fail(
             `Cannot calculate relative path: objects '${base}' and '${target}' are not part of the same object tree`
         )
+    }
 
     const baseParts = splitJsonPath(base.path)
     const targetParts = splitJsonPath(target.path)
@@ -135,21 +133,7 @@ export function getRelativePathBetweenNodes(base: ObjectNode, target: ObjectNode
 
 /**
  * @internal
- * @private
- */
-export function resolveNodeByPath(base: ObjectNode, pathParts: string): INode
-/**
- * @internal
- * @private
- */
-export function resolveNodeByPath(
-    base: ObjectNode,
-    pathParts: string,
-    failIfResolveFails: boolean
-): INode | undefined
-/**
- * @internal
- * @private
+ * @hidden
  */
 export function resolveNodeByPath(
     base: ObjectNode,
@@ -161,42 +145,21 @@ export function resolveNodeByPath(
 
 /**
  * @internal
- * @private
- */
-export function resolveNodeByPathParts(base: ObjectNode, pathParts: string[]): INode
-/**
- * @internal
- * @private
- */
-export function resolveNodeByPathParts(
-    base: ObjectNode,
-    pathParts: string[],
-    failIfResolveFails: boolean
-): INode | undefined
-/**
- * @internal
- * @private
+ * @hidden
  */
 export function resolveNodeByPathParts(
     base: ObjectNode,
     pathParts: string[],
     failIfResolveFails: boolean = true
 ): INode | undefined {
-    // counter part of getRelativePath
-    // note that `../` is not part of the JSON pointer spec, which is actually a prefix format
-    // in json pointer: "" = current, "/a", attribute a, "/" is attribute "" etc...
-    // so we treat leading ../ apart...
     let current: INode | null = base
+
     for (let i = 0; i < pathParts.length; i++) {
         const part = pathParts[i]
-        if (part === "") {
-            current = current!.root
-            continue
-        } else if (part === "..") {
+        if (part === "..") {
             current = current!.parent
             if (current) continue // not everything has a parent
-        } else if (part === "." || part === "") {
-            // '/bla' or 'a//b' splits to empty strings
+        } else if (part === ".") {
             continue
         } else if (current) {
             if (current instanceof ScalarNode) {
@@ -224,7 +187,7 @@ export function resolveNodeByPathParts(
             }
         }
         if (failIfResolveFails)
-            return fail(
+            throw fail(
                 `Could not resolve '${part}' in path '${joinJsonPath(pathParts.slice(0, i)) ||
                     "/"}' while resolving '${joinJsonPath(pathParts)}'`
             )
@@ -235,7 +198,7 @@ export function resolveNodeByPathParts(
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export function convertChildNodesToArray(childNodes: IChildNodesMap | null): INode[] {
     if (!childNodes) return EMPTY_ARRAY as INode[]

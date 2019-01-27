@@ -12,7 +12,7 @@ import {
 
 /**
  * @internal
- * @private
+ * @hidden
  */
 export class Late<C, S, T> extends Type<C, S, T> {
     readonly definition: () => IAnyType
@@ -40,12 +40,12 @@ export class Late<C, S, T> extends Type<C, S, T> {
                 else throw e
             }
             if (mustSucceed && t === undefined)
-                fail(
+                throw fail(
                     "Late type seems to be used too early, the definition (still) returns undefined"
                 )
             if (t) {
                 if (process.env.NODE_ENV !== "production" && !isType(t))
-                    fail(
+                    throw fail(
                         "Failed to determine subtype, make sure types.late returns a type definition."
                     )
                 this._subType = t
@@ -90,11 +90,12 @@ export class Late<C, S, T> extends Type<C, S, T> {
 export function late<T extends IAnyType>(type: () => T): T
 export function late<T extends IAnyType>(name: string, type: () => T): T
 /**
- * Defines a type that gets implemented later. This is useful when you have to deal with circular dependencies.
+ * `types.late` - Defines a type that gets implemented later. This is useful when you have to deal with circular dependencies.
  * Please notice that when defining circular dependencies TypeScript isn't smart enough to inference them.
  * You need to declare an interface to explicit the return type of the late parameter function.
  *
- * @example
+ * Example:
+ * ```ts
  *  interface INode {
  *       childs: INode[]
  *  }
@@ -103,14 +104,11 @@ export function late<T extends IAnyType>(name: string, type: () => T): T
  *  const Node = types.model({
  *       childs: types.optional(types.array(types.late<any, INode>(() => Node)), [])
  *  })
+ * ```
  *
- * @export
- * @alias types.late
- * @template S
- * @template T
- * @param {string} [name] The name to use for the type that will be returned.
- * @param {ILateType<S, T>} type A function that returns the type that will be defined.
- * @returns {IType<S, T>}
+ * @param name The name to use for the type that will be returned.
+ * @param type A function that returns the type that will be defined.
+ * @returns
  */
 export function late(nameOrType: any, maybeType?: () => IAnyType): IAnyType {
     const name = typeof nameOrType === "string" ? nameOrType : `late(${nameOrType.toString()})`
@@ -118,7 +116,7 @@ export function late(nameOrType: any, maybeType?: () => IAnyType): IAnyType {
     // checks that the type is actually a late type
     if (process.env.NODE_ENV !== "production") {
         if (!(typeof type === "function" && type.length === 0))
-            fail(
+            throw fail(
                 "Invalid late type, expected a function with zero arguments that returns a type, got: " +
                     type
             )
@@ -129,10 +127,8 @@ export function late(nameOrType: any, maybeType?: () => IAnyType): IAnyType {
 /**
  * Returns if a given value represents a late type.
  *
- * @export
- * @template IT
- * @param {IT} type
- * @returns {type is IT}
+ * @param type
+ * @returns
  */
 export function isLateType<IT extends IAnyType>(type: IT): type is IT {
     return isType(type) && (type.flags & TypeFlags.Late) > 0
